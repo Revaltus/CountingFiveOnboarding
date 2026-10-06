@@ -244,7 +244,7 @@ This does NOT apply to the **background** impact reviews (`reviewContentForMbpIm
 
 ### QA Desk
 - **Stage.** `generated_pages.qa_status` (queued/running/done/error/skipped) is claimed atomically like `generation_status`. QA runs per page in `/api/content-jobs/[id]/qa/run`, triggered with the CRON bearer.
-- **Mode.** `CONTENT_QA_MODE=off|shadow|on`.
+- **Mode.** `CONTENT_QA_MODE=off|shadow|on` (unset = `shadow`). Prod runs `on` since 2026-10-06.
   - `shadow` only reports; the legacy critic still runs.
   - `on` applies `auto` findings, replaces the legacy critic step, and holds phase 5→6 + the content-ready email until QA is terminal.
 - **Safety.** Specialists may only auto-fix kinds in their `allowedAuto`. Accuracy claims and section changes are always flags.
