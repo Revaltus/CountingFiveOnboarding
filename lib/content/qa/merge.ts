@@ -27,7 +27,7 @@ const intersects = (a: [number, number], b: [number, number]) => a[0] < b[1] && 
 // True span-overlap check: a `find` that merely shares characters with a
 // protected string at a boundary (contains neither it nor is contained by
 // it) must still be refused — the naive containment check misses that case.
-function overlapsProtected(body: string, find: string, protectedTexts: string[]): boolean {
+export function overlapsProtected(body: string, find: string, protectedTexts: string[]): boolean {
   const findSpans = spansOf(body, find)
   if (!findSpans.length) return false
   return protectedTexts.some((p) => {

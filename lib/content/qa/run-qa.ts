@@ -13,12 +13,12 @@ import { activeTeam } from '@/lib/content/active-team'
 import { countWords } from '@/lib/content/word-count-validator'
 import { scoreDraft, CRITIC_CALL_CAP_MS } from '@/lib/content/draft-critic'
 import { CRITIC_MODEL } from '@/lib/content/generation-tuning'
-import { parseBlockAnnotations } from '@/lib/content/block-annotation-validator'
 import type { QaReview } from '@/types/qa-review'
 import { qaMode, QA_MAX_ATTEMPTS, type QaMode } from './mode'
 import { runRules } from './rules'
 import { runAllSpecialists } from './specialists/run'
 import { mergeFindings } from './merge'
+import { protectedTextsFor } from './protected'
 import { judgeFindings, judgeUnavailableFinding, dedupeFindings, qaPasses, agentScores } from './judge'
 
 type Supabase = ReturnType<typeof createServerClient>
@@ -36,20 +36,6 @@ export type QaDeps = {
 
 const PAGE_COLS =
   'id, content_job_id, page_url, page_title, generation_status, admin_approved_content, qa_status, qa_attempts, content_markdown, meta_title, meta_description, target_keyword, hero_block, hero_variant, hero_subhead, faq_block'
-
-// protectedTexts is the set of body substrings no patch may ever touch:
-//   - a verbatim page: the whole body (nothing generated here is ours to fix)
-//   - otherwise: section bodies whose heading matches an active team member's
-//     name — these are word-for-word bios the operator asked to preserve.
-function protectedTextsFor(body: string, verbatim: boolean, teamNames: string[]): string[] {
-  if (verbatim) return [body]
-  const names = teamNames.map(n => n.toLowerCase()).filter(Boolean)
-  if (!names.length) return []
-  return parseBlockAnnotations(body)
-    .filter(s => names.some(n => s.headingText.toLowerCase().includes(n)))
-    .map(s => s.sectionContent.trim())
-    .filter(Boolean)
-}
 
 export async function runQaForPage(
   contentJobId: string,

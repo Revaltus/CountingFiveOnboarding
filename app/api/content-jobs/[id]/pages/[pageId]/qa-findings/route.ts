@@ -9,6 +9,7 @@ import { reviewContentForMbpImpact } from '@/lib/mbp/impact-review'
 import { fenceQaForHumanEdit } from '@/lib/content/qa/fence'
 import { parseQaReview } from '@/types/qa-review'
 import { applyOneFinding } from '@/lib/content/qa/apply-finding'
+import { loadProtectedTexts } from '@/lib/content/qa/protected'
 
 interface QaFindingActionBody { findingId?: unknown; action?: unknown }
 
@@ -39,16 +40,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const review = parseQaReview(row.qa_review)
   if (!review) return NextResponse.json({ error: 'This page has no QA report' }, { status: 409 })
 
+  const pageBody = row.content_markdown ?? ''
+  let protectedTexts: string[] = []
+  if (body.action === 'apply') {
+    const prot = await loadProtectedTexts(supabase, { contentJobId: id, sessionId, pageUrl: row.page_url, body: pageBody })
+    if (!prot.ok) return internalError('qa-findings:protected', prot.error, "Couldn't check the page's word-for-word text")
+    protectedTexts = prot.texts
+  }
+
   // templateVersion is intentionally not passed here: the only variant fixes
   // that exist today (rules' media-side alternation) are baseline-safe at
   // every template version, so there's nothing yet that needs it gated.
   const result = applyOneFinding(
-    { body: row.content_markdown ?? '', metaTitle: row.meta_title, metaDescription: row.meta_description },
-    review, body.findingId, body.action,
+    { body: pageBody, metaTitle: row.meta_title, metaDescription: row.meta_description },
+    review, body.findingId, body.action, protectedTexts,
   )
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 })
 
-  const contentChanged = result.fields.body !== (row.content_markdown ?? '')
+  const contentChanged = result.fields.body !== pageBody
     || result.fields.metaTitle !== row.meta_title
     || result.fields.metaDescription !== row.meta_description
 
