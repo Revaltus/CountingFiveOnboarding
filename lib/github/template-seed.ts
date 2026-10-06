@@ -3,7 +3,7 @@
 //
 // Git objects are not shared across repositories, so seeding an already-created
 // repo means re-creating every template blob in the target and committing them.
-// This is a one-time, ~2-calls-per-file operation (177 files today), so it runs
+// This is a one-time burst (one read per file, one write per binary), so it runs
 // from its OWN admin route with a generous maxDuration — never inline on the
 // package-assembly path, which is already near its Vercel budget.
 //
@@ -22,11 +22,19 @@ import { sleep, withRateLimitRetry } from './rate-limit'
 // been seeded (created from the template, or seeded by a prior run).
 const SEED_MARKER_PATH = 'package.json'
 
-// How many template blobs to copy at once. Kept low: GitHub imposes a
-// SECONDARY rate limit on bursts of content-creating requests, and copying a
-// 177-file template is exactly such a burst. Low concurrency + retry (below) is
-// GitHub's documented remedy — serialize writes and honor retry-after.
-const BLOB_COPY_CONCURRENCY = 3
+// How many template blobs to read at once. Reads don't count toward GitHub's
+// content-creation limit; the throttling plugin spaces WRITES ~1s apart, so a
+// createBlob per file (374 files by 2026.09.13) blew the route's 300s budget.
+// Text files are therefore inlined into the single createTree call and only
+// binaries get their own createBlob write.
+const BLOB_READ_CONCURRENCY = 8
+
+// Valid UTF-8 with no NUL bytes round-trips through createTree's inline
+// `content`; anything else (images, fonts) must be uploaded as a base64 blob.
+export function isInlineableText(buf: Buffer): boolean {
+  if (buf.includes(0)) return false
+  return Buffer.from(buf.toString('utf-8'), 'utf-8').equals(buf)
+}
 
 // Git tree blob modes we preserve verbatim; anything else is coerced to a
 // regular file. (Submodules / directory entries are filtered out before here.)
@@ -171,18 +179,18 @@ export async function seedRepoFromTemplate(
     throw new Error(`Template ${template.owner}/${template.repo} has no files to seed`)
   }
 
-  // Fetch a template blob's bytes as normalized base64. getBlob returns
-  // 'base64' (normal) or 'utf-8'; it returns 'none' for blobs >100MB, which
-  // can't be round-tripped this way — guard so that surfaces as a clear,
-  // file-named error instead of a cryptic "Unknown encoding" crash.
-  const fetchTemplateBlobBase64 = async (sha: string, path: string): Promise<string> => {
+  // Fetch a template blob's bytes. getBlob returns 'base64' (normal) or
+  // 'utf-8'; it returns 'none' for blobs >100MB, which can't be round-tripped
+  // this way — guard so that surfaces as a clear, file-named error instead of a
+  // cryptic "Unknown encoding" crash.
+  const fetchTemplateBlob = async (sha: string, path: string): Promise<Buffer> => {
     const blob = await withRateLimitRetry(() =>
       octokit.git.getBlob({ owner: template.owner, repo: template.repo, file_sha: sha })
     )
     if (blob.data.encoding !== 'base64' && blob.data.encoding !== 'utf-8') {
       throw new Error(`Cannot seed ${path}: unsupported blob encoding "${blob.data.encoding}"`)
     }
-    return Buffer.from(blob.data.content, blob.data.encoding).toString('base64')
+    return Buffer.from(blob.data.content, blob.data.encoding)
   }
 
   // The Git Data API (createBlob/createTree/createCommit) refuses to operate on
@@ -202,7 +210,7 @@ export async function seedRepoFromTemplate(
 
   if (!mainExists) {
     const bootstrap = blobs.find((b) => b.path !== SEED_MARKER_PATH) ?? blobs[0]
-    const bootstrapContent = await fetchTemplateBlobBase64(bootstrap.sha, bootstrap.path)
+    const bootstrapContent = (await fetchTemplateBlob(bootstrap.sha, bootstrap.path)).toString('base64')
     await withRateLimitRetry(() =>
       octokit.repos.createOrUpdateFileContents({
         owner: target.owner,
@@ -228,37 +236,42 @@ export async function seedRepoFromTemplate(
     commit_sha: mainRef.data.object.sha,
   }))
 
-  // Re-create each template blob in the target and collect tree entries. Safe
+  // Build tree entries: text inline, binaries as freshly created blobs. Safe
   // now that the repo has at least one commit.
-  const treeEntries: { path: string; mode: BlobMode; type: 'blob'; sha: string }[] = []
-  for (let i = 0; i < blobs.length; i += BLOB_COPY_CONCURRENCY) {
-    const batch = blobs.slice(i, i + BLOB_COPY_CONCURRENCY)
+  type SeedTreeEntry = { path: string; mode: BlobMode; type: 'blob' } & ({ content: string } | { sha: string })
+  const treeEntries: SeedTreeEntry[] = []
+  for (let i = 0; i < blobs.length; i += BLOB_READ_CONCURRENCY) {
+    const batch = blobs.slice(i, i + BLOB_READ_CONCURRENCY)
     const copied = await Promise.all(
-      batch.map(async (b) => {
-        const content = await fetchTemplateBlobBase64(b.sha, b.path)
+      batch.map(async (b): Promise<SeedTreeEntry> => {
+        const bytes = await fetchTemplateBlob(b.sha, b.path)
+        const base = { path: b.path, mode: normalizeMode(b.mode), type: 'blob' as const }
+        if (isInlineableText(bytes)) return { ...base, content: bytes.toString('utf-8') }
         const created = await withEmptyRepoRetry(() =>
           withRateLimitRetry(() =>
             octokit.git.createBlob({
               owner: target.owner,
               repo: target.repo,
-              content,
+              content: bytes.toString('base64'),
               encoding: 'base64',
             })
           )
         )
-        return { path: b.path, mode: normalizeMode(b.mode), type: 'blob' as const, sha: created.data.sha }
+        return { ...base, sha: created.data.sha }
       })
     )
     treeEntries.push(...copied)
   }
 
-  const newTree = await withRateLimitRetry(() =>
-    octokit.git.createTree({
-      owner: target.owner,
-      repo: target.repo,
-      base_tree: mainCommit.data.tree.sha,
-      tree: treeEntries,
-    })
+  const newTree = await withEmptyRepoRetry(() =>
+    withRateLimitRetry(() =>
+      octokit.git.createTree({
+        owner: target.owner,
+        repo: target.repo,
+        base_tree: mainCommit.data.tree.sha,
+        tree: treeEntries,
+      })
+    )
   )
   const commit = await withRateLimitRetry(() =>
     octokit.git.createCommit({

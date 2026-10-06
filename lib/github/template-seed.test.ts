@@ -38,7 +38,7 @@ vi.mock('./rate-limit', () => ({
   withRateLimitRetry: <T>(fn: () => Promise<T>) => fn(),
 }))
 
-import { isTemplateOnlyPath, seedRepoFromTemplate } from './template-seed'
+import { isInlineableText, isTemplateOnlyPath, seedRepoFromTemplate } from './template-seed'
 
 function reqError(status: number, message: string): RequestError {
   return new RequestError(message, status, {
@@ -47,6 +47,7 @@ function reqError(status: number, message: string): RequestError {
 }
 
 const TEMPLATE = 'Revaltus/CountingFiveTemplate'
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00])
 
 function stubTemplate() {
   reposGet.mockResolvedValue({ data: { default_branch: 'main' } })
@@ -61,11 +62,13 @@ function stubTemplate() {
       truncated: false,
       tree: [
         { path: 'package.json', sha: 'b1', type: 'blob', mode: '100644' },
-        { path: 'src/app/page.tsx', sha: 'b2', type: 'blob', mode: '100644' },
+        { path: 'public/hero.png', sha: 'b2', type: 'blob', mode: '100644' },
       ],
     },
   })
-  getBlob.mockResolvedValue({ data: { encoding: 'base64', content: Buffer.from('x').toString('base64') } })
+  getBlob.mockImplementation(async ({ file_sha }: { file_sha: string }) => ({
+    data: { encoding: 'base64', content: (file_sha === 'b2' ? PNG_BYTES : Buffer.from('{"name":"site"}')).toString('base64') },
+  }))
   createTree.mockResolvedValue({ data: { sha: 'new-tree' } })
   createCommit.mockResolvedValue({ data: { sha: 'seed-commit' } })
   updateRef.mockResolvedValue({ data: {} })
@@ -97,6 +100,17 @@ describe('isTemplateOnlyPath', () => {
   })
 })
 
+describe('isInlineableText', () => {
+  it('accepts UTF-8 text, including multi-byte characters', () => {
+    expect(isInlineableText(Buffer.from('const a = "café — ✓"\n'))).toBe(true)
+  })
+
+  it('rejects bytes with NULs or invalid UTF-8', () => {
+    expect(isInlineableText(PNG_BYTES)).toBe(false)
+    expect(isInlineableText(Buffer.from([0x66, 0xff, 0xfe, 0x67]))).toBe(false)
+  })
+})
+
 describe('seedRepoFromTemplate', () => {
   it('retries the transient "Git Repository is empty" 409 right after bootstrap', async () => {
     getContent.mockRejectedValue(reqError(404, 'Not Found'))
@@ -109,7 +123,7 @@ describe('seedRepoFromTemplate', () => {
     const result = await seedRepoFromTemplate('Revaltus/client')
 
     expect(result).toMatchObject({ seeded: true, fileCount: 2, commitSha: 'seed-commit' })
-    expect(createBlob).toHaveBeenCalledTimes(4)
+    expect(createBlob).toHaveBeenCalledTimes(3)
   })
 
   it('does not retry any other 409', async () => {
@@ -118,7 +132,22 @@ describe('seedRepoFromTemplate', () => {
     createBlob.mockRejectedValue(reqError(409, 'Conflict'))
 
     await expect(seedRepoFromTemplate('Revaltus/client')).rejects.toThrow('Conflict')
-    expect(createBlob).toHaveBeenCalledTimes(2)
+    expect(createBlob).toHaveBeenCalledTimes(1)
+  })
+
+  it('inlines text files into the tree and uploads only binaries as blobs', async () => {
+    getContent.mockRejectedValue(reqError(404, 'Not Found'))
+    stubTemplate()
+    createBlob.mockResolvedValue({ data: { sha: 'png-blob' } })
+
+    await seedRepoFromTemplate('Revaltus/client')
+
+    expect(createBlob).toHaveBeenCalledTimes(1)
+    expect(createBlob.mock.calls[0][0].content).toBe(PNG_BYTES.toString('base64'))
+    expect(createTree.mock.calls[0][0].tree).toEqual([
+      { path: 'package.json', mode: '100644', type: 'blob', content: '{"name":"site"}' },
+      { path: 'public/hero.png', mode: '100644', type: 'blob', sha: 'png-blob' },
+    ])
   })
 
   it('gives up on the empty-repo 409 after the bounded retries', async () => {
