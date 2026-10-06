@@ -15,8 +15,8 @@
 // ---------------------------------------------------------------------------
 import { RequestError } from '@octokit/request-error'
 import { getOctokit, resolveRepo } from './app-client'
-import { ensureDraftBranch, MAIN_BRANCH } from './repo-files'
-import { withRateLimitRetry } from './rate-limit'
+import { DRAFT_BRANCH, ensureDraftBranch, MAIN_BRANCH, syncMainIntoDraft } from './repo-files'
+import { sleep, withRateLimitRetry } from './rate-limit'
 
 // Presence of this file on the target's main branch means the repo has already
 // been seeded (created from the template, or seeded by a prior run).
@@ -37,6 +37,40 @@ function normalizeMode(mode: string | undefined): BlobMode {
 
 function isRequestError(err: unknown): err is RequestError {
   return err instanceof RequestError
+}
+
+// Right after the first commit lands in an empty repo, GitHub's Git Data API
+// keeps answering 409 "Git Repository is empty" for a moment. Seen in prod: the
+// bootstrap commit succeeded and the next createBlob 409'd, stranding the repo
+// with one file. Retry only that exact error, briefly.
+const EMPTY_REPO_RETRY_DELAYS_MS = [500, 1000, 2000, 3000, 4000]
+
+function isEmptyRepoError(err: unknown): boolean {
+  return isRequestError(err) && err.status === 409 && /repository is empty/i.test(err.message)
+}
+
+async function withEmptyRepoRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      if (!isEmptyRepoError(err) || attempt >= EMPTY_REPO_RETRY_DELAYS_MS.length) throw err
+      await sleep(EMPTY_REPO_RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
+// A draft branch cut before the template landed (e.g. library articles drafted
+// against the bootstrap-only main) lacks every template file. Assembling onto it
+// and publishing would add/add-conflict with the seeded main, so pull main in.
+async function bringDraftUpToMain(slug: string): Promise<void> {
+  await ensureDraftBranch(slug)
+  const sync = await syncMainIntoDraft(slug)
+  if (!sync.synced) {
+    throw new Error(
+      `Template seeded, but the draft branch conflicts with it. Use "Reset draft to live" and retry. (${sync.reason})`
+    )
+  }
 }
 
 // Template-only files that must never reach a client repo.
@@ -60,14 +94,14 @@ export type SeedResult =
   | { seeded: false; skipped: 'already-seeded'; fileCount: 0 }
   | { seeded: true; fileCount: number; commitSha: string; skippedWorkflowFiles: number }
 
-// True when the target repo already contains the template marker on main.
-// A missing marker, a missing main branch, or an empty repo all read as "not
+// True when the target repo already contains the template marker on `ref`.
+// A missing marker, a missing branch, or an empty repo all read as "not
 // seeded" so a freshly-created empty repo qualifies for seeding.
-export async function isRepoSeeded(slug: string): Promise<boolean> {
+export async function isRepoSeeded(slug: string, ref: string = MAIN_BRANCH): Promise<boolean> {
   const octokit = getOctokit()
   const { owner, repo } = resolveRepo(slug)
   try {
-    await octokit.repos.getContent({ owner, repo, path: SEED_MARKER_PATH, ref: MAIN_BRANCH })
+    await octokit.repos.getContent({ owner, repo, path: SEED_MARKER_PATH, ref })
     return true
   } catch (err) {
     if (isRequestError(err) && (err.status === 404 || err.status === 409)) return false
@@ -80,6 +114,10 @@ export async function seedRepoFromTemplate(
   options: { authorName?: string; authorEmail?: string } = {}
 ): Promise<SeedResult> {
   if (await isRepoSeeded(slug)) {
+    // Self-heal a repo left with a template-less draft by an earlier failed seed.
+    // Only then: a normal live client's draft already carries the template, and
+    // merging main into it on every publish could surface unrelated conflicts.
+    if (!(await isRepoSeeded(slug, DRAFT_BRANCH))) await bringDraftUpToMain(slug)
     return { seeded: false, skipped: 'already-seeded', fileCount: 0 }
   }
 
@@ -181,12 +219,14 @@ export async function seedRepoFromTemplate(
   }
 
   // main now exists (pre-existing or just bootstrapped) — read it for base_tree.
-  const mainRef = await octokit.git.getRef({ owner: target.owner, repo: target.repo, ref: `heads/${MAIN_BRANCH}` })
-  const mainCommit = await octokit.git.getCommit({
+  const mainRef = await withEmptyRepoRetry(() =>
+    octokit.git.getRef({ owner: target.owner, repo: target.repo, ref: `heads/${MAIN_BRANCH}` })
+  )
+  const mainCommit = await withEmptyRepoRetry(() => octokit.git.getCommit({
     owner: target.owner,
     repo: target.repo,
     commit_sha: mainRef.data.object.sha,
-  })
+  }))
 
   // Re-create each template blob in the target and collect tree entries. Safe
   // now that the repo has at least one commit.
@@ -196,13 +236,15 @@ export async function seedRepoFromTemplate(
     const copied = await Promise.all(
       batch.map(async (b) => {
         const content = await fetchTemplateBlobBase64(b.sha, b.path)
-        const created = await withRateLimitRetry(() =>
-          octokit.git.createBlob({
-            owner: target.owner,
-            repo: target.repo,
-            content,
-            encoding: 'base64',
-          })
+        const created = await withEmptyRepoRetry(() =>
+          withRateLimitRetry(() =>
+            octokit.git.createBlob({
+              owner: target.owner,
+              repo: target.repo,
+              content,
+              encoding: 'base64',
+            })
+          )
         )
         return { path: b.path, mode: normalizeMode(b.mode), type: 'blob' as const, sha: created.data.sha }
       })
@@ -240,8 +282,8 @@ export async function seedRepoFromTemplate(
   )
 
   // The editor and the assembly push both work off the draft branch — make sure
-  // it exists now that main does.
-  await ensureDraftBranch(slug)
+  // it exists and carries the template now that main does.
+  await bringDraftUpToMain(slug)
 
   return { seeded: true, fileCount: treeEntries.length, commitSha: commit.data.sha, skippedWorkflowFiles }
 }
