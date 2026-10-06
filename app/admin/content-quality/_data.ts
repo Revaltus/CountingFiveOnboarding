@@ -6,6 +6,7 @@ import {
   CRITIC_DIMENSIONS,
 } from '@/lib/content/critic-review'
 import { qaStats } from '@/lib/content/qa/stats'
+import { parseQaReview } from '@/types/qa-review'
 import type { SessionSchema } from '@/types/session-schema'
 
 // Read-side aggregation for the content-quality dashboard. Reads the advisory
@@ -37,6 +38,17 @@ export interface FlaggedItem {
   scoredAt: string | null
 }
 
+// A site page whose QA review still has open findings, with a link that opens
+// its preview modal (where the findings are listed with Apply/Dismiss).
+export interface QaOpenPage {
+  site: string | null
+  label: string
+  open: number
+  highOpen: number
+  kinds: string[] // `${agent}:${kind}`, deduped
+  href: string | null
+}
+
 export interface ContentQualityData {
   totalScored: number
   totalFlagged: number
@@ -46,7 +58,11 @@ export interface ContentQualityData {
   slices: QualitySlice[] // [Pages, Blog & resources]
   recentFlagged: FlaggedItem[]
   qa: ReturnType<typeof qaStats>
+  qaOpenPages: QaOpenPage[] // every page with open findings, most urgent first; the page filters + caps
 }
+
+const previewHref = (sessionId: string, pageId: string): string =>
+  `/admin/content/${sessionId}?preview=${encodeURIComponent(pageId)}`
 
 const round1 = (v: number): number => Math.round(v * 10) / 10
 
@@ -95,7 +111,7 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
   const [pagesRes, resourcesRes] = await Promise.all([
     supabase
       .from('generated_pages')
-      .select('critic_review, qa_review, page_url, content_job_id')
+      .select('id, critic_review, qa_review, page_url, content_job_id')
       // Either verdict: a QA review whose judge failed has no critic_review but
       // still belongs in the QA stats. fold() skips rows with a null critic.
       .or('critic_review.not.is.null,qa_review.not.is.null'),
@@ -127,6 +143,7 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
     scoredAt: string | null
     sessionId: string | null
     draftPath: string | null
+    pageId: string | null
   }
   const flaggedRaw: FlaggedRaw[] = []
 
@@ -140,6 +157,7 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
         scoredAt: scoredAtOf(r.critic_review),
         sessionId: sessionByJob.get(r.content_job_id) ?? null,
         draftPath: null,
+        pageId: r.id,
       })
     }
   }
@@ -153,6 +171,7 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
         scoredAt: scoredAtOf(r.critic_review),
         sessionId: r.session_id ?? null,
         draftPath: r.draft_path ?? null,
+        pageId: null,
       })
     }
   }
@@ -162,8 +181,26 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
   flaggedRaw.sort((a, b) => (b.scoredAt ?? '').localeCompare(a.scoredAt ?? ''))
   const topFlagged = flaggedRaw.slice(0, 20)
 
+  type QaOpenRaw = Omit<QaOpenPage, 'site' | 'href'> & { sessionId: string | null; pageId: string }
+  const qaOpenRaw: QaOpenRaw[] = []
+  for (const r of pageRows) {
+    const open = parseQaReview(r.qa_review)?.findings.filter((f) => f.status === 'open') ?? []
+    if (!open.length) continue
+    qaOpenRaw.push({
+      label: r.page_url ?? '(page)',
+      open: open.length,
+      highOpen: open.filter((f) => f.severity === 'high').length,
+      kinds: [...new Set(open.map((f) => `${f.agent}:${f.kind}`))],
+      sessionId: sessionByJob.get(r.content_job_id) ?? null,
+      pageId: r.id,
+    })
+  }
+  qaOpenRaw.sort((a, b) => b.highOpen - a.highOpen || b.open - a.open || a.label.localeCompare(b.label))
+
   const siteBySession = new Map<string, string>()
-  const flaggedSessionIds = [...new Set(topFlagged.map((f) => f.sessionId).filter((v): v is string => !!v))]
+  const flaggedSessionIds = [
+    ...new Set([...topFlagged, ...qaOpenRaw].map((f) => f.sessionId).filter((v): v is string => !!v)),
+  ]
   if (flaggedSessionIds.length) {
     const { data: sessions } = await supabase
       .from('sessions')
@@ -181,10 +218,19 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
     site: f.sessionId ? siteBySession.get(f.sessionId) ?? null : null,
     label: f.label,
     overall: f.overall,
-    href: f.sessionId
-      ? `/admin/content/${f.sessionId}/edit${f.kind === 'Blog' && f.draftPath ? `?path=${encodeURIComponent(f.draftPath)}` : ''}`
-      : null,
+    // Site pages open their preview (critic + QA panels); blog drafts open in the editor.
+    href: !f.sessionId
+      ? null
+      : f.kind === 'Page' && f.pageId
+        ? previewHref(f.sessionId, f.pageId)
+        : `/admin/content/${f.sessionId}/edit${f.kind === 'Blog' && f.draftPath ? `?path=${encodeURIComponent(f.draftPath)}` : ''}`,
     scoredAt: f.scoredAt,
+  }))
+
+  const qaOpenPages: QaOpenPage[] = qaOpenRaw.map(({ sessionId, pageId, ...rest }) => ({
+    ...rest,
+    site: sessionId ? siteBySession.get(sessionId) ?? null : null,
+    href: sessionId ? previewHref(sessionId, pageId) : null,
   }))
 
   const totalScored = pageAcc.scored + resourceAcc.scored
@@ -213,5 +259,6 @@ export async function loadContentQuality(): Promise<ContentQualityData> {
     slices: [slice('Site pages', pageAcc), slice('Blog & resources', resourceAcc)],
     recentFlagged,
     qa: qaStats(pageRows.map((r) => r.qa_review)),
+    qaOpenPages,
   }
 }

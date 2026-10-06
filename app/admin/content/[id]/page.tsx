@@ -8,13 +8,20 @@ import GithubRepoConnector from '@/components/admin/GithubRepoConnector'
 import type { DesignTokens } from '@/types/design-tokens'
 import type { SessionSchema } from '@/types/session-schema'
 import type { NavJson } from '@/types/nav-json'
+import { isUuid } from '@/lib/design/input-validation'
 
 export default async function ContentWorkflowPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ preview?: string | string[] }>
 }) {
   const { id } = await params
+  // ?preview=<generated_pages.id> (from the Content Quality dashboard) opens
+  // that page's preview modal on load.
+  const { preview } = await searchParams
+  const initialPreviewPageId = typeof preview === 'string' && isUuid(preview) ? preview : null
 
   // The content workflow (palette → sitemap → research → outlines → generation)
   // is manager/admin-only; editors and Site Owners work in the draft editor.
@@ -242,6 +249,7 @@ export default async function ContentWorkflowPage({
         confirmedPageCount={confirmedPageCount}
         navConfig={navConfig}
         confirmedSitemap={confirmedSitemap}
+        initialPreviewPageId={initialPreviewPageId}
       />
     </main>
   )

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { parseQaReview, type Finding, type QaSeverity } from '@/types/qa-review'
+import { parseQaReview, type Finding, type PatchTarget, type QaSeverity } from '@/types/qa-review'
 import { criticOverall } from '@/lib/content/critic-review'
 
 const SEVERITY_ORDER: Record<QaSeverity, number> = { high: 0, med: 1, low: 2 }
@@ -13,6 +13,12 @@ const AGENT_LABEL: Record<string, string> = {
   seo: 'SEO & GEO',
   structure: 'Structure',
   judge: 'Judge',
+}
+
+const PATCH_TARGET_LABEL: Record<PatchTarget, string> = {
+  body: 'Body',
+  meta_title: 'Meta title',
+  meta_description: 'Meta description',
 }
 
 // The QA Desk's human review surface: a background multi-agent pass already
@@ -104,16 +110,16 @@ export default function QaPanel({
         )}
       </div>
 
-      {qaReview.mode === 'shadow' && (
+      {qaReview.mode === 'shadow' && open.length > 0 && (
         <p className="px-3 pb-2 text-xs font-body text-text-muted">
-          QA ran in shadow mode: it found {open.length + changed.length} item(s) but never changed the page. This is for comparison only — nothing here needs you.
+          Shadow mode: QA didn&apos;t change this page. Review the suggestions below and apply the ones you want.
         </p>
       )}
 
-      {qaReview.mode === 'on' && open.length > 0 && (
+      {open.length > 0 && (
         <div className="border-t border-border-default px-3 py-2 space-y-2">
           <div className="text-xs font-heading font-semibold text-text-secondary uppercase tracking-wide">
-            Needs you ({open.length})
+            {qaReview.mode === 'shadow' ? 'Findings' : 'Needs you'} ({open.length})
           </div>
           {open.map(f => (
             <FindingRow
@@ -148,16 +154,7 @@ export default function QaPanel({
                   <div className="text-text-secondary">
                     <span className="font-heading font-semibold">{AGENT_LABEL[f.agent] ?? f.agent}</span>: {f.message}
                   </div>
-                  {f.patch ? (
-                    <div className="mt-1 font-mono text-[11px] space-y-0.5">
-                      <div className="text-error bg-error/5 rounded px-1.5 py-0.5 break-words">− {f.patch.find}</div>
-                      <div className="text-success bg-success/5 rounded px-1.5 py-0.5 break-words">+ {f.patch.replace}</div>
-                    </div>
-                  ) : f.variantFix ? (
-                    <div className="mt-1 text-text-muted">
-                      Section {f.variantFix.sectionIndex + 1} layout variant → {f.variantFix.variant}
-                    </div>
-                  ) : null}
+                  <FixPreview finding={f} />
                 </div>
               ))}
             </div>
@@ -165,7 +162,7 @@ export default function QaPanel({
         </div>
       )}
 
-      {qaReview.mode === 'on' && open.length === 0 && changed.length === 0 && (
+      {open.length === 0 && changed.length === 0 && (
         <p className="px-3 pb-3 text-xs font-body text-text-muted">No findings — this page passed clean.</p>
       )}
     </div>
@@ -209,6 +206,7 @@ function FindingRow({
         <div className="flex-1 min-w-0">
           <div className="text-xs font-body text-text-primary">
             <span className="font-heading font-semibold text-text-secondary">{AGENT_LABEL[finding.agent] ?? finding.agent}</span>{' '}
+            <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-surface-card border border-border-default text-text-muted">{finding.kind}</span>{' '}
             {finding.message}
           </div>
           {finding.quote && (
@@ -216,10 +214,14 @@ function FindingRow({
               &ldquo;{finding.quote}&rdquo;
             </blockquote>
           )}
-          {finding.patch && (
+          {canApply ? (
             <div className="mt-1 text-[11px] font-body text-text-secondary">
-              <span className="font-heading font-semibold">Suggested fix:</span> {finding.patch.replace}
+              <span className="font-heading font-semibold">Suggested change</span>
+              {finding.patch && <span className="text-text-muted"> · {PATCH_TARGET_LABEL[finding.patch.target]}</span>}
+              <FixPreview finding={finding} />
             </div>
+          ) : (
+            <div className="mt-1 text-[11px] font-body text-text-muted">No automatic fix — edit the page by hand, or dismiss.</div>
           )}
           {error && (
             <div role="alert" className="mt-1 text-[11px] font-body text-error">
@@ -250,4 +252,23 @@ function FindingRow({
       </div>
     </div>
   )
+}
+
+function FixPreview({ finding }: { finding: Finding }) {
+  if (finding.patch) {
+    return (
+      <div className="mt-1 font-mono text-[11px] space-y-0.5">
+        <div className="text-error bg-error/5 rounded px-1.5 py-0.5 break-words">− {finding.patch.find}</div>
+        <div className="text-success bg-success/5 rounded px-1.5 py-0.5 break-words">+ {finding.patch.replace}</div>
+      </div>
+    )
+  }
+  if (finding.variantFix) {
+    return (
+      <div className="mt-1 text-text-muted">
+        Section {finding.variantFix.sectionIndex + 1} layout variant → {finding.variantFix.variant}
+      </div>
+    )
+  }
+  return null
 }

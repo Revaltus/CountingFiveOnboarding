@@ -90,9 +90,11 @@ function wordCountBadge(actual: number | null | undefined, target: number | null
 export default function GenerationPhase({
   contentJobId,
   jobPhase,
+  initialPreviewPageId = null,
 }: {
   contentJobId: string
   jobPhase: number
+  initialPreviewPageId?: string | null
 }) {
   const router = useRouter()
   // Fires the phase-finalize/refresh once per "generation just finished"
@@ -103,7 +105,7 @@ export default function GenerationPhase({
   const [loading, setLoading] = useState(true)
   const [pollNonce, setPollNonce] = useState(0)
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set())
-  const [previewPageId, setPreviewPageId] = useState<string | null>(null)
+  const [previewPageId, setPreviewPageId] = useState<string | null>(initialPreviewPageId)
   const [restarting, setRestarting] = useState(false)
   const [restartError, setRestartError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -667,7 +669,11 @@ export default function GenerationPhase({
         <MarkdownPreviewModal
           contentJobId={contentJobId}
           pageId={previewPageId}
-          onClose={() => setPreviewPageId(null)}
+          onClose={() => {
+            // Drop a ?preview= deep link so a refresh doesn't reopen the modal.
+            if (initialPreviewPageId) router.replace(window.location.pathname, { scroll: false })
+            setPreviewPageId(null)
+          }}
           onApprovalChange={() => setPollNonce(n => n + 1)}
         />
       )}

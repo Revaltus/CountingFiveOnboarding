@@ -34,6 +34,7 @@ export default function PhaseStepper({
   navConfig,
   confirmedSitemap,
   githubRepo,
+  initialPreviewPageId = null,
 }: {
   currentPhase: number
   sessionId: string
@@ -46,6 +47,7 @@ export default function PhaseStepper({
   navConfig: NavJson | null
   confirmedSitemap: SitemapEntry[]
   githubRepo: string | null
+  initialPreviewPageId?: string | null
 }) {
   const designLocked = isDesignSystemLocked({ palette: existingPalette, design_tokens: existingTokens })
   return (
@@ -95,7 +97,7 @@ export default function PhaseStepper({
           // past 5 — so the admin can return later to preview pages, toggle
           // approval, or regenerate. The component's internal state handles
           // the "all done" UI on its own.
-          content = <GenerationPhase contentJobId={contentJobId} jobPhase={currentPhase} />
+          content = <GenerationPhase contentJobId={contentJobId} jobPhase={currentPhase} initialPreviewPageId={initialPreviewPageId} />
         } else if (phase === 6) {
           content = (
             <DeliverablesPhase

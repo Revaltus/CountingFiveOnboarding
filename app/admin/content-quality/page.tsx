@@ -7,9 +7,20 @@ import { loadContentQuality } from './_data'
 // newly scored drafts show immediately.
 export const dynamic = 'force-dynamic'
 
-export default async function ContentQualityPage() {
+const QA_OPEN_PAGE_CAP = 50
+
+export default async function ContentQualityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ kind?: string | string[] }>
+}) {
   await requirePageAccess('admin')
   const data = await loadContentQuality()
+  // ?kind=<agent>:<kind> narrows the open-findings list to one finding kind.
+  const { kind } = await searchParams
+  const kindFilter = typeof kind === 'string' && kind ? kind : null
+  const openPagesAll = kindFilter ? data.qaOpenPages.filter((p) => p.kinds.includes(kindFilter)) : data.qaOpenPages
+  const openPages = openPagesAll.slice(0, QA_OPEN_PAGE_CAP)
 
   return (
     <div className="px-6 py-8 max-w-[1200px] mx-auto">
@@ -121,7 +132,19 @@ export default async function ContentQualityPage() {
                     {data.qa.byKind.map((k) => (
                       <tr key={`${k.agent}-${k.kind}`} className="border-b border-border-default last:border-0">
                         <td className="px-4 py-3 text-text-primary font-semibold">{k.agent}</td>
-                        <td className="px-4 py-3 text-text-secondary">{k.kind}</td>
+                        <td className="px-4 py-3 text-text-secondary">
+                          {k.open > 0 ? (
+                            <Link
+                              href={`/admin/content-quality?kind=${encodeURIComponent(`${k.agent}:${k.kind}`)}#qa-open`}
+                              className="text-brand-cyan hover:underline"
+                              title="Show pages with this open finding"
+                            >
+                              {k.kind}
+                            </Link>
+                          ) : (
+                            k.kind
+                          )}
+                        </td>
                         <td className="px-4 py-3 tabular-nums">{k.applied}</td>
                         <td className="px-4 py-3 tabular-nums">{k.open}</td>
                         <td className="px-4 py-3 tabular-nums">{k.accepted}</td>
@@ -138,7 +161,65 @@ export default async function ContentQualityPage() {
               </div>
               <p className="text-text-muted text-[11px] pt-2">
                 High dismiss rate = QA is wrong here too often; demote this kind to flag-only or fix its prompt.
+                Click a kind to list the pages that have it open.
               </p>
+            </section>
+          )}
+
+          {data.qaOpenPages.length > 0 && (
+            <section id="qa-open" className="mb-6 scroll-mt-6">
+              <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
+                <h2 className="text-lg font-heading font-bold text-brand-navy">
+                  Pages with open QA findings
+                  {kindFilter && <span className="font-mono text-sm text-text-secondary"> · {kindFilter}</span>}
+                </h2>
+                {kindFilter && (
+                  <Link href="/admin/content-quality#qa-open" className="text-xs font-body text-brand-cyan hover:underline">
+                    Clear filter
+                  </Link>
+                )}
+              </div>
+              <div className="bg-surface-card border border-border-default rounded-xl shadow-subtle overflow-hidden">
+                {openPages.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm font-body text-text-muted">No pages have this finding open.</p>
+                ) : (
+                  <ul className="divide-y divide-border-default">
+                    {openPages.map((p) => (
+                      <li key={p.href ?? `${p.site}-${p.label}`} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="w-48 shrink-0 truncate text-sm font-body font-semibold text-text-primary">
+                          {p.site ?? 'Unknown site'}
+                        </span>
+                        <span className="flex-1 min-w-0 truncate text-sm font-body text-text-secondary">
+                          {p.href ? (
+                            <Link href={p.href} className="hover:underline">
+                              {p.label}
+                            </Link>
+                          ) : (
+                            p.label
+                          )}
+                        </span>
+                        <span className="shrink-0 font-mono text-xs tabular-nums text-text-muted">
+                          {p.open} open
+                          {p.highOpen > 0 && <span className="text-error font-semibold"> · {p.highOpen} high</span>}
+                        </span>
+                        {p.href && (
+                          <Link
+                            href={p.href}
+                            className="shrink-0 px-3 py-1 text-xs font-heading font-semibold bg-brand-cyan text-text-inverse rounded-pill hover:opacity-90 transition-opacity"
+                          >
+                            Review
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {openPagesAll.length > openPages.length && (
+                <p className="text-text-muted text-[11px] pt-2">
+                  Showing the {openPages.length} most urgent of {openPagesAll.length} pages.
+                </p>
+              )}
             </section>
           )}
 
