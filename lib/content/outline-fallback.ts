@@ -20,3 +20,19 @@ export function buildOutlineFailureNote(err: unknown): string {
 export function isFallbackOutline(adminNotes: string | null | undefined): boolean {
   return typeof adminNotes === 'string' && adminNotes.startsWith(OUTLINE_FALLBACK_PREFIX)
 }
+
+// The model sometimes declines a page (e.g. it judged the topic excluded) and
+// returns a well-formed but empty outline: `sections: []` and a blank h1, with
+// its reason in `notes`. Saved as-is, a blank h1 reads as "still generating"
+// forever, which blocks approval and generation with no visible cause.
+export function isRefusedOutline(parsed: { h1?: unknown; sections?: unknown }): boolean {
+  const h1 = typeof parsed.h1 === 'string' ? parsed.h1.trim() : ''
+  return !h1 || !Array.isArray(parsed.sections) || parsed.sections.length === 0
+}
+
+export function buildOutlineRefusalNote(modelNotes: unknown): string {
+  const reason = typeof modelNotes === 'string' && modelNotes.trim()
+    ? modelNotes.trim().slice(0, 600)
+    : 'no reason given'
+  return `${OUTLINE_FALLBACK_PREFIX} — the outline generator declined this page: ${reason} Edit the sections or regenerate before approving.`
+}

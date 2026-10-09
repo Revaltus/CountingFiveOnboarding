@@ -79,6 +79,27 @@ describe('buildFirmContext — enriched MBP fields', () => {
     expect(out).toContain('real estate, cryptocurrency')
   })
 
+  it('keeps kept niches/services in scope when a dropped duplicate is excluded', () => {
+    const out = buildFirmContext({
+      business: { contentExclusions: ['Estates & Trusts / Fiduciary Administration'] } as SessionSchema['business'],
+      niches: [
+        { name: 'Estates & Trusts' },
+        { name: 'Estates & Trusts / Fiduciary Administration', status: 'dropped' },
+      ] as SessionSchema['niches'],
+      services: [{ name: 'Estates & Trusts' }, { name: 'Payroll' }] as SessionSchema['services'],
+    })
+    expect(out).toContain('These stay IN scope and are never excluded: Estates & Trusts, Payroll.')
+    expect(out).toContain('never refuse it')
+  })
+
+  it('omits the in-scope rule when there are no exclusions', () => {
+    const out = buildFirmContext({
+      business: { contentEmphasis: ['wineries'] } as SessionSchema['business'],
+      niches: [{ name: 'Wineries' }] as SessionSchema['niches'],
+    })
+    expect(out).not.toContain('stay IN scope')
+  })
+
   it('emits the scope block even when no firm profile fields are set', () => {
     const out = buildFirmContext({ business: { contentExclusions: ['real estate'] } as SessionSchema['business'] })
     expect(out).toContain('CONTENT SCOPE')

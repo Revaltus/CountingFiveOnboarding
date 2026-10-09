@@ -15,6 +15,7 @@ type PageStatus = {
   errorMessage?: string | null
   startedAt?: string | null
   parent?: string
+  outlineApproved?: boolean
   approved?: boolean
   needsClientReview?: boolean
   clientApproved?: boolean
@@ -507,7 +508,10 @@ export default function GenerationPhase({
       <div className="max-h-[400px] overflow-y-auto space-y-1">
         {(() => {
           return status.pages.map(page => {
-            const s = STATUS_ICONS[page.status] ?? STATUS_ICONS.pending
+            const awaitingOutline = page.status === 'pending' && page.outlineApproved === false
+            const s = awaitingOutline
+              ? { ...STATUS_ICONS.pending, title: 'Awaiting outline approval — approve it in Outlines above' }
+              : STATUS_ICONS[page.status] ?? STATUS_ICONS.pending
             const depth = depthOf(page.url, parentByUrl)
             const wcBadge = page.status === 'complete' ? wordCountBadge(page.wordCountActual, page.wordCountTarget) : null
             const chips = page.status === 'complete'
@@ -525,6 +529,14 @@ export default function GenerationPhase({
                 <div className="flex items-center gap-2 py-1.5">
                   <span className={`text-sm ${s.cls}`} title={s.title}>{s.icon}</span>
                   <span className="text-sm font-body text-text-primary flex-1 truncate">{page.title}</span>
+                  {awaitingOutline && (
+                    <span
+                      className="text-xs font-mono px-1.5 py-0.5 rounded text-warning-strong bg-warning/10"
+                      title="Generation only runs approved outlines. Approve (or fix) this page's outline in the Outlines step above."
+                    >
+                      Outline not approved
+                    </span>
+                  )}
                   {wcBadge && (
                     <span
                       className={`text-xs font-mono px-1.5 py-0.5 rounded ${wcBadge.cls}`}
@@ -655,6 +667,11 @@ export default function GenerationPhase({
           killed the pipeline mid-call, leaving rows orphaned in running.
           The pipeline itself skips already-complete rows, so re-running is
           idempotent for the work that's already done. */}
+      {status.pages.some(p => p.status === 'pending' && p.outlineApproved === false) && (
+        <p className="text-xs text-text-muted font-body">
+          Pages marked &quot;Outline not approved&quot; won&apos;t generate until their outline is approved in the Outlines step — restarting won&apos;t pick them up.
+        </p>
+      )}
       {status.complete + status.error < status.total && (
         <button
           onClick={restartGeneration}

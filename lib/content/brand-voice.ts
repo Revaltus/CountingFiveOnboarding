@@ -248,6 +248,26 @@ export function buildContentScopeBlock(schema: SessionSchema): string {
       `DO NOT create any page, section, or copy about, and never mention: ${exclusions.join(', ')}. ` +
         `The client explicitly excluded these — treat them as off-limits.`,
     )
+    // Review drops are mirrored into exclusions, and a dropped item often shares
+    // a topic with a kept one ("Estates & Trusts / Fiduciary Administration"
+    // dropped as a duplicate of the kept "Estates & Trusts"). Without these lines
+    // the model read the exclusion as banning the whole topic and refused to
+    // outline the kept service's confirmed pages, stranding the job.
+    const inScope = [...activeNiches(schema), ...activeServices(schema)]
+      .map(x => str(x.name).trim())
+      .filter(Boolean)
+    const seen = new Set<string>()
+    const kept = inScope.filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()))
+    if (kept.length) {
+      lines.push(
+        `Each exclusion bans only that exact offering, not a broader topic it shares words with. ` +
+          `These stay IN scope and are never excluded: ${kept.join(', ')}.`,
+      )
+    }
+    lines.push(
+      'Every page you are asked to plan or write is on the operator-confirmed sitemap — never refuse it. ' +
+        'If its topic overlaps an exclusion, cover it through the in-scope angle instead.',
+    )
   }
   return lines.join('\n')
 }

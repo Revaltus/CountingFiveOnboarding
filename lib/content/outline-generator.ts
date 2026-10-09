@@ -20,7 +20,7 @@ const OUTLINE_ROUTE_MAX_DURATION_MS = 300_000
 // One outline is a small call (measured output p50 881 tokens) plus its low-effort
 // retry rung; don't begin one without room for both.
 const OUTLINE_MIN_VIABLE_MS = 90_000
-import { OUTLINE_FALLBACK_NOTE, buildOutlineFailureNote } from './outline-fallback'
+import { OUTLINE_FALLBACK_NOTE, buildOutlineFailureNote, buildOutlineRefusalNote, isRefusedOutline } from './outline-fallback'
 import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
 import type { AuditResult } from '@/types/audit-result'
@@ -287,7 +287,16 @@ ${auditHintsBlock}`
   }
 
   let outline: OutlineResult
-  if (res.ok) {
+  if (res.ok && isRefusedOutline(res.outline)) {
+    // A declined page isn't a truncation, so the low-effort retry wouldn't help.
+    console.warn(`[outline-gen] Model declined to outline ${pageUrl} — saving a review-flagged placeholder`)
+    outline = {
+      h1: pageTitle,
+      sections: [{ h2: 'Overview', description: 'Add content here', word_count: 300 }],
+      target_keyword: res.outline.target_keyword || targetKeyword,
+      notes: buildOutlineRefusalNote(res.outline.notes),
+    }
+  } else if (res.ok) {
     outline = res.outline
   } else {
     console.warn(

@@ -3,6 +3,8 @@ import {
   OUTLINE_FALLBACK_NOTE,
   OUTLINE_FALLBACK_PREFIX,
   buildOutlineFailureNote,
+  buildOutlineRefusalNote,
+  isRefusedOutline,
   isFallbackOutline,
 } from './outline-fallback'
 
@@ -33,5 +35,24 @@ describe('outline fallback markers', () => {
     expect(isFallbackOutline(null)).toBe(false)
     expect(isFallbackOutline(undefined)).toBe(false)
     expect(isFallbackOutline('')).toBe(false)
+  })
+})
+
+describe('refused outlines', () => {
+  it('flags an empty-sections / blank-h1 outline as refused', () => {
+    expect(isRefusedOutline({ h1: '', sections: [] })).toBe(true)
+    expect(isRefusedOutline({ h1: 'Estate planning', sections: [] })).toBe(true)
+    expect(isRefusedOutline({ h1: '  ', sections: [{ h2: 'x' }] })).toBe(true)
+  })
+
+  it('accepts a real outline', () => {
+    expect(isRefusedOutline({ h1: 'Estate planning', sections: [{ h2: 'x' }] })).toBe(false)
+  })
+
+  it('builds a review-flagged note that carries the model reason', () => {
+    const note = buildOutlineRefusalNote('No outline produced. Topic excluded.')
+    expect(isFallbackOutline(note)).toBe(true)
+    expect(note).toContain('Topic excluded.')
+    expect(isFallbackOutline(buildOutlineRefusalNote(undefined))).toBe(true)
   })
 })

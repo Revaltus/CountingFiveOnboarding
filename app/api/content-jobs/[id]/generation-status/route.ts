@@ -18,7 +18,7 @@ export async function GET(
   const { id } = await params
   const supabase = createServerClient()
 
-  const [{ data: pages, error }, { data: job }] = await Promise.all([
+  const [{ data: pages, error }, { data: job }, { data: outlines }] = await Promise.all([
     supabase
       .from('generated_pages')
       .select('id, page_url, page_title, generation_status, generation_error, generation_started_at, admin_approved_content, needs_client_review, client_approved_content, word_count_actual, word_count_target')
@@ -29,6 +29,10 @@ export async function GET(
       .select('confirmed_sitemap')
       .eq('id', id)
       .single(),
+    supabase
+      .from('page_outlines')
+      .select('page_url, admin_approved')
+      .eq('content_job_id', id),
   ])
 
   if (error) {
@@ -37,6 +41,9 @@ export async function GET(
 
   const sitemap = (job?.confirmed_sitemap ?? []) as Array<{ url: string; parent?: string }>
   const parentByUrl = new Map(sitemap.map(p => [p.url, p.parent]))
+  // Generation only runs approved outlines, so a pending page whose outline is
+  // unapproved can't be moved by Restart — the UI says so instead of spinning.
+  const outlineApprovedByUrl = new Map((outlines ?? []).map(o => [o.page_url, o.admin_approved]))
 
   // Advisory critic scores are fetched separately and best-effort: the
   // critic_review column may not exist yet (pre-migration 064), so a failure
@@ -89,6 +96,7 @@ export async function GET(
         : null,
       startedAt: p.generation_started_at,
       parent: parentByUrl.get(p.page_url),
+      outlineApproved: outlineApprovedByUrl.get(p.page_url) ?? true,
       approved: p.admin_approved_content,
       needsClientReview: p.needs_client_review,
       clientApproved: p.client_approved_content,
