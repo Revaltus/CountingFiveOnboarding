@@ -88,8 +88,25 @@ describe('buildFirmContext — enriched MBP fields', () => {
       ] as SessionSchema['niches'],
       services: [{ name: 'Estates & Trusts' }, { name: 'Payroll' }] as SessionSchema['services'],
     })
-    expect(out).toContain('These stay IN scope and are never excluded: Estates & Trusts, Payroll.')
+    // Only kept items sharing a word with an exclusion are named.
+    expect(out).toContain('These stay IN scope and are never excluded: Estates & Trusts.')
     expect(out).toContain('never refuse it')
+  })
+
+  it('never lists a kept item the operator excluded by name as in scope', () => {
+    const out = buildFirmContext({
+      business: { contentExclusions: ['Audit Protection service page'] } as SessionSchema['business'],
+      services: [{ name: 'Audit Protection' }, { name: 'Audit Readiness' }, { name: 'Payroll' }] as SessionSchema['services'],
+    })
+    expect(out).toContain('These stay IN scope and are never excluded: Audit Readiness.')
+  })
+
+  it('collapses Unknown fields into one never-invent line', () => {
+    const out = buildFirmContext({
+      business: { foundingYear: 'Unknown', firmHistory: 'Unknown', tagline: 'Numbers, sorted' } as SessionSchema['business'],
+    })
+    expect(out).toContain('Not known (never invent these): Founded, Firm history')
+    expect(out).not.toContain('Founded: Unknown')
   })
 
   it('omits the in-scope rule when there are no exclusions', () => {

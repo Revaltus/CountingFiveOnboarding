@@ -130,7 +130,9 @@ Log token usage in every `onFinish` callback. Flag any exchange that exceeds the
 | Phase 4 | 3,000 | Sonnet |
 | Phase 5–6 | 1,500 | Haiku |
 
-If any exchange exceeds 5,000 input tokens, stop and investigate before continuing. `app/api/chat/route.ts` emits a `console.error` (`[token-budget] EXCEEDED ...`) when the estimated input tokens (chars/4) cross 5k — watch server logs for it.
+If any exchange exceeds 5,000 input tokens, stop and investigate before continuing.
+
+Outline generation is a background job, not a chat. Its prompt carries the full firm profile, so it runs 4.0k–5.4k input tokens per outline, and about 4k of that is the cached prefix. Its warning threshold is 6,000 (`OUTLINE_INPUT_TOKEN_TARGET`). Check per-section sizes with `npx tsx scripts/measure-outline-prompt.ts <job-id>` after changing `buildOutlinePrompt` or `buildFirmContext`. `app/api/chat/route.ts` emits a `console.error` (`[token-budget] EXCEEDED ...`) when the estimated input tokens (chars/4) cross 5k — watch server logs for it.
 
 ### Model Selection
 All model ids live in `lib/content/generation-tuning.ts` — import the constant, never hardcode an id.

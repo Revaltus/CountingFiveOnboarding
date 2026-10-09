@@ -4,6 +4,7 @@ import { activeServices } from './active-services'
 import { activeTeam } from './active-team'
 import { provenanceOf } from '@/lib/mbp/provenance'
 import { arr, str, isSentinelNone, realStrings } from './schema-coerce'
+import { matchingExclusion, operatorExclusions, overlapsAnyExclusion } from './exclusion-match'
 
 // Shared brand-voice prompt fragments. Extracted from content-generator.ts so
 // the page generator and the Resources blog generators describe the firm's
@@ -38,20 +39,37 @@ export function firmLocation(schema: SessionSchema): string {
     : ''
 }
 
+// "Unknown"-style answers carry no fact; listing each as its own line cost
+// tokens in every prompt. They're collected into one "never invent" line.
+const UNKNOWN_VALUES = new Set(['unknown', 'not known', 'tbd', 'unsure', 'not sure'])
+const isUnknownValue = (v: string): boolean =>
+  isSentinelNone(v) || UNKNOWN_VALUES.has(v.trim().toLowerCase().replace(/[.!]+$/, ''))
+
+export type FirmContextOptions = {
+  // The local-competitor list is for copy differentiation; outline planning
+  // (structure only) doesn't use it, so the outline prompt drops it.
+  includeCompetitors?: boolean
+}
+
 // The substantive firm-profile facts that should ground every piece of copy —
 // the business/audience/services context beyond brand voice. buildBrandVoiceBlock
 // covers tone + positioning + differentiators; this covers everything else in the
 // MBP that informs what the copy should SAY. Omits empties so blanks add no noise.
-export function buildFirmContext(schema: SessionSchema): string {
+export function buildFirmContext(schema: SessionSchema, opts: FirmContextOptions = {}): string {
   const b = schema.business
   const c = schema.culture
   const lines: string[] = []
+  const unknown: string[] = []
   const add = (label: string, v: string | undefined | null, cap = 400) => {
-    if (typeof v === 'string' && v.trim()) lines.push(`${label}: ${v.trim().slice(0, cap)}`)
+    if (typeof v !== 'string' || !v.trim()) return
+    if (isUnknownValue(v)) unknown.push(label)
+    else lines.push(`${label}: ${v.trim().slice(0, cap)}`)
   }
   const list = (label: string, v: string[] | undefined) => {
     const items = arr(v).map(x => str(x).trim()).filter(Boolean)
-    if (items.length) lines.push(`${label}: ${items.join(', ')}`)
+    const real = items.filter(x => !isUnknownValue(x))
+    if (real.length) lines.push(`${label}: ${real.join(', ')}`)
+    else if (items.length) unknown.push(label)
   }
 
   add('Tagline', b?.tagline, 160)
@@ -136,14 +154,15 @@ export function buildFirmContext(schema: SessionSchema): string {
     const yelp = str(rep.yelpRating).trim()
     if (yelp) repBits.push(`Yelp ${yelp}`)
     const review = str(rep.reviewSummary).trim()
-    if (review) repBits.push(review.slice(0, 160))
+    if (review && !isUnknownValue(review)) repBits.push(review.slice(0, 160))
+    else if (review) unknown.push('Reputation & reviews')
     const press = arr(rep.pressAndMedia).map(p => str(p).trim()).filter(Boolean)
     if (press.length) repBits.push(`Press: ${press.slice(0, 3).join(', ')}`)
     if (repBits.length) lines.push(`Reputation & trust signals: ${repBits.join(' | ')}`)
   }
 
   // Local competitors — for differentiation only. Never name them in copy.
-  const competitors = arr(b?.competitors)
+  const competitors = (opts.includeCompetitors === false ? [] : arr(b?.competitors))
     .filter(c2 => str(c2?.name).trim())
     .slice(0, 5)
     .map(c2 => {
@@ -191,6 +210,8 @@ export function buildFirmContext(schema: SessionSchema): string {
     const contentRecs = arr(audit.contentLibrary?.recommendations).map(r => str(r).trim()).filter(Boolean).slice(0, 3)
     if (contentRecs.length) auditLines.push(`Content gaps to fill (from audit): ${contentRecs.map(r => r.slice(0, 160)).join(' | ')}`)
   }
+
+  if (unknown.length) lines.push(`Not known (never invent these): ${unknown.join(', ')}`)
 
   const profile = lines.length
     ? `FIRM PROFILE (ground all copy in these specifics — never contradict or generalize away from them):\n${lines.join('\n')}`
@@ -253,9 +274,14 @@ export function buildContentScopeBlock(schema: SessionSchema): string {
     // dropped as a duplicate of the kept "Estates & Trusts"). Without these lines
     // the model read the exclusion as banning the whole topic and refused to
     // outline the kept service's confirmed pages, stranding the job.
+    // A kept item the operator excluded by name ("Audit Protection service page")
+    // stays excluded — only review-mirrored exclusions give way to kept items.
+    // Only items that share a word with an exclusion are named — the rest can't
+    // be misread, and the profile above already lists them.
+    const typed = operatorExclusions(schema)
     const inScope = [...activeNiches(schema), ...activeServices(schema)]
       .map(x => str(x.name).trim())
-      .filter(Boolean)
+      .filter(n => n && overlapsAnyExclusion(n, exclusions) && !matchingExclusion(n, typed))
     const seen = new Set<string>()
     const kept = inScope.filter(n => !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()))
     if (kept.length) {
@@ -266,7 +292,7 @@ export function buildContentScopeBlock(schema: SessionSchema): string {
     }
     lines.push(
       'Every page you are asked to plan or write is on the operator-confirmed sitemap — never refuse it. ' +
-        'If its topic overlaps an exclusion, cover it through the in-scope angle instead.',
+        'If its topic overlaps an exclusion, cover it through the in-scope angle and leave the excluded offering out.',
     )
   }
   return lines.join('\n')

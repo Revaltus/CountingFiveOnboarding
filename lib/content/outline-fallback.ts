@@ -47,3 +47,7 @@ export function isApprovableOutline(o: { h1?: unknown; sections?: unknown; admin
   if (!Array.isArray(o.sections) || o.sections.length === 0) return false
   return !isFallbackOutline(typeof o.admin_notes === 'string' ? o.admin_notes : null)
 }
+
+export function buildExclusionConflictNote(exclusion: string): string {
+  return `${OUTLINE_FALLBACK_PREFIX} — this page conflicts with the client's content exclusion "${exclusion.slice(0, 200)}". Remove it from the sitemap, or lift the exclusion on the MBP and regenerate this outline.`
+}

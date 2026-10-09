@@ -62,3 +62,19 @@ describe('isSentinelNone / realStrings', () => {
     expect(realStrings(['Cut a dentist\'s tax bill 20%', ' n/a ', ''])).toEqual(["Cut a dentist's tax bill 20%"])
   })
 })
+
+describe('JSON-encoded string arrays', () => {
+  it('arr() decodes a JSON string array stored as a string', () => {
+    expect(arr('["Bank reconciliation", "Sales tax filing"]' as unknown as string[])).toEqual(['Bank reconciliation', 'Sales tax filing'])
+  })
+
+  it('str() flattens one to a comma list', () => {
+    expect(str('["Thin margins", "Tip reporting"]')).toBe('Thin margins, Tip reporting')
+  })
+
+  it('leaves non-JSON or mixed arrays as plain strings', () => {
+    expect(str('[TBD]')).toBe('[TBD]')
+    expect(arr('[1, 2]' as unknown as string[])).toEqual(['[1, 2]'])
+    expect(str('Plain text')).toBe('Plain text')
+  })
+})

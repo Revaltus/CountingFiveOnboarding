@@ -6,6 +6,7 @@ import {
   buildOutlineRefusalNote,
   isRefusedOutline,
   isApprovableOutline,
+  buildExclusionConflictNote,
   isFallbackOutline,
 } from './outline-fallback'
 
@@ -76,5 +77,13 @@ describe('isApprovableOutline', () => {
     expect(isApprovableOutline({ ...good, h1: null })).toBe(false)
     expect(isApprovableOutline({ ...good, sections: [] })).toBe(false)
     expect(isApprovableOutline({ ...good, sections: 'x' })).toBe(false)
+  })
+})
+
+describe('buildExclusionConflictNote', () => {
+  it('is review-flagged and names the exclusion', () => {
+    const note = buildExclusionConflictNote('Audit Protection service page')
+    expect(isFallbackOutline(note)).toBe(true)
+    expect(note).toContain('Audit Protection service page')
   })
 })

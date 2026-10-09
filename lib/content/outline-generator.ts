@@ -5,6 +5,7 @@ import { derivePaletteToneSignal } from './palette-tone-signal'
 import { buildFirmContext } from './brand-voice'
 import { loadNoGoPhrases, buildNoGoPromptBlock } from './no-go-phrases'
 import { activeNiches } from './active-niches'
+import { arr, str } from './schema-coerce'
 import { cleanHeading } from './anti-slop-validator'
 import { OUTLINE_EXEMPLAR } from './exemplars'
 import { resolvePageIntent } from './page-intent'
@@ -20,7 +21,8 @@ const OUTLINE_ROUTE_MAX_DURATION_MS = 300_000
 // One outline is a small call (measured output p50 881 tokens) plus its low-effort
 // retry rung; don't begin one without room for both.
 const OUTLINE_MIN_VIABLE_MS = 90_000
-import { OUTLINE_FALLBACK_NOTE, buildOutlineFailureNote, buildOutlineRefusalNote, isRefusedOutline } from './outline-fallback'
+import { OUTLINE_FALLBACK_NOTE, buildExclusionConflictNote, buildOutlineFailureNote, buildOutlineRefusalNote, isRefusedOutline } from './outline-fallback'
+import { matchingExclusion, operatorExclusions } from './exclusion-match'
 import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
 import type { AuditResult } from '@/types/audit-result'
@@ -64,86 +66,85 @@ export type PageResearch = {
   merged_content: string | null
 }
 
-export async function generateOutlineForPage(
-  outlineId: string,
-  pageTitle: string,
-  pageUrl: string,
-  contentJobId: string,
-  sessionId: string,
-  schema: SessionSchema,
-  palette: PaletteData | null,
-  auditResult: AuditResult | null = null,
-  auditPageByUrl?: Map<string, AuditPageSummary>,
-  researchByUrl?: Map<string, PageResearch>
-): Promise<void> {
-  const supabase = createServerClient()
+// Measured 2026-10-09 (scripts/measure-outline-prompt.ts): 4.0k–5.4k input tokens
+// per outline; a 13-service firm sits at the top. ~4k of it is the cached prefix
+// (read at 0.05x). Above this, something regressed — e.g. an unbounded block.
+const OUTLINE_INPUT_TOKEN_TARGET = 6000
 
-  // A verbatim page (operator "bring this page over word-for-word") gets a fixed
-  // outline mirroring the captured page's own headings — no AI planning, nothing
-  // to restructure. The body is reproduced from the same snapshot at generation.
-  const { data: mode } = await supabase
-    .from('page_outlines')
-    .select('generation_mode, source_snapshot_path')
-    .eq('id', outlineId)
-    .maybeSingle()
-  if (mode?.generation_mode === 'verbatim') {
-    const markdown = mode.source_snapshot_path ? await readSnapshot(supabase, sessionId, mode.source_snapshot_path) : null
-    const outline = verbatimOutline(pageTitle, markdown)
-    await supabase
-      .from('page_outlines')
-      .update({
-        h1: outline.h1,
-        sections: asJson(outline.sections),
-        target_keyword: outline.target_keyword,
-        admin_notes: outline.notes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', outlineId)
-    return
-  }
+// Outline-only trims (the page writer keeps its fuller inputs).
+const OUTLINE_MAX_SECONDARY_KEYWORDS = 10
+const OUTLINE_COMPETITOR_EXCERPT_CHARS = 250
 
-  // Research for this page — prefer the batch-loaded Map (one query for the whole
-  // job); fall back to a per-page SELECT when called standalone (regenerate route).
-  let research: PageResearch | null
-  if (researchByUrl) {
-    research = researchByUrl.get(pageUrl) ?? null
-  } else {
-    const { data } = await supabase
-      .from('research_results')
-      .select('target_keyword, secondary_keywords, competitor_references, existing_content, merged_content')
-      .eq('content_job_id', contentJobId)
-      .eq('page_url', pageUrl)
-      .limit(1)
-      .maybeSingle()
-    research = data
-  }
+// Strip what a raw scrape drags along: HTML entities, "Skip to content",
+// leftover comment markers, repeated whitespace.
+export function cleanScrapedText(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&[a-z]+;|&#\d+;/gi, ' ')
+    .replace(/-->|<!--/g, ' ')
+    .replace(/\bSkip to (?:main )?content\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
+export type OutlinePromptInput = {
+  pageTitle: string
+  pageUrl: string
+  schema: SessionSchema
+  palette: PaletteData | null
+  research: PageResearch | null
+  auditedPage: AuditPageSummary | undefined
+  noGoPhrases: string[]
+}
+
+// Pure prompt assembly for one outline: the job-constant `staticPrefix` (cached)
+// and the per-page `dynamicSuffix`. Exported so the prompt can be measured and
+// tested without a model call (scripts/measure-outline-prompt.ts).
+export function buildOutlinePrompt(input: OutlinePromptInput): {
+  staticPrefix: string
+  dynamicSuffix: string
+  targetKeyword: string
+} {
+  const { pageTitle, pageUrl, schema, palette, research, auditedPage, noGoPhrases } = input
   const targetKeyword = research?.target_keyword ?? pageTitle.toLowerCase()
-  const secondaryKeywords = (research?.secondary_keywords as string[]) ?? []
+  const secondaryKeywords = ((research?.secondary_keywords as string[]) ?? []).slice(0, OUTLINE_MAX_SECONDARY_KEYWORDS)
   const competitorRefs = (research?.competitor_references as Array<{ url: string; title: string; excerpt: string }>) ?? []
   const existingContent = research?.existing_content ?? ''
   const mergedContent = research?.merged_content ?? ''
 
   const paletteTone = derivePaletteToneSignal(palette)
 
+  // Competitor excerpts are raw page scrapes (nav menus, "Skip to content",
+  // HTML entities). An outline only needs the gist of how rivals pitch, so each
+  // is cleaned and kept short.
   const competitorExcerpts = truncateToTokenBudget(
     competitorRefs
       .slice(0, 3)
-      .map(c => `[${c.title}] (${c.url})\n${c.excerpt?.slice(0, 500) ?? ''}`)
+      .map(c => `[${cleanScrapedText(c.title)}]\n${cleanScrapedText(c.excerpt ?? '').slice(0, OUTLINE_COMPETITOR_EXCERPT_CHARS)}`)
       .join('\n\n'),
-    600
+    300
   )
 
-  // Site-wide content gaps from the audit (if the session came from one).
+  // Site-wide content gaps from the audit (if the session came from one). It sits
+  // in every page's prompt, so each list is kept to its top 3, without URLs.
   const cg = schema.content_gaps
+  const gapItems = (items: unknown) =>
+    arr(items as unknown[] | undefined)
+      .map(x => str(x).replace(/\s*\(https?:\/\/[^)]*\)/g, '').trim().slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('; ')
   const gapsBlock =
     cg && (cg.authorityGaps?.length || cg.conversionGaps?.length || cg.nicheGaps?.length || cg.teamExpertiseGaps?.length)
       ? [
           'SITE AUDIT — CONTENT GAPS (address where relevant to this page):',
-          cg.conversionGaps?.length ? `Conversion: ${cg.conversionGaps.slice(0, 5).join('; ')}` : '',
-          cg.authorityGaps?.length ? `Depth/authority: ${cg.authorityGaps.slice(0, 5).join('; ')}` : '',
-          cg.nicheGaps?.length ? `Coverage: ${cg.nicheGaps.slice(0, 5).join('; ')}` : '',
-          cg.teamExpertiseGaps?.length ? `Team expertise to leverage: ${cg.teamExpertiseGaps.slice(0, 5).join('; ')}` : '',
+          cg.conversionGaps?.length ? `Conversion: ${gapItems(cg.conversionGaps)}` : '',
+          cg.authorityGaps?.length ? `Depth/authority: ${gapItems(cg.authorityGaps)}` : '',
+          cg.nicheGaps?.length ? `Coverage: ${gapItems(cg.nicheGaps)}` : '',
+          cg.teamExpertiseGaps?.length ? `Team expertise to leverage: ${gapItems(cg.teamExpertiseGaps)}` : '',
         ]
           .filter(Boolean)
           .join('\n')
@@ -151,9 +152,6 @@ export async function generateOutlineForPage(
 
   // Per-page audit findings — what's wrong with this exact page today. Prefer
   // the prebuilt index (O(1)); fall back to a scan for standalone callers.
-  const auditedPage = auditPageByUrl
-    ? auditPageByUrl.get(normUrl(pageUrl))
-    : auditResult?.page_analysis_summary?.find(p => normUrl(p.url) === normUrl(pageUrl))
   const auditHintsBlock = auditedPage
     ? [
         'SITE AUDIT — THIS PAGE TODAY (the rewrite must fix these):',
@@ -166,7 +164,7 @@ export async function generateOutlineForPage(
         .join('\n')
     : ''
 
-  const noGoBlock = buildNoGoPromptBlock((await loadNoGoPhrases()).map(p => p.phrase))
+  const noGoBlock = buildNoGoPromptBlock(noGoPhrases)
 
   // Static, job-constant prefix (firm context + site-wide content gaps + the
   // output/rules spec). Cache breakpoint via buildCachedMessages so every page
@@ -178,10 +176,9 @@ FIRM CONTEXT:
 Brand voice: ${schema.brand?.currentTone ?? 'professional and approachable'}
 Positioning: ${schema.business?.positioningOption ?? ''} — ${schema.business?.positioningStatement?.slice(0, 200) ?? ''}
 Differentiators: ${schema.business?.differentiators ?? 'Not specified'}
-Niches: ${activeNiches(schema).map(n => n.name).join(', ') || 'General CPA services'}
-${paletteTone ? `Palette tone: ${paletteTone}` : ''}
+${activeNiches(schema).length ? '' : 'Niches: General CPA services\n'}${paletteTone ? `Palette tone: ${paletteTone}` : ''}
 
-${buildFirmContext(schema)}
+${buildFirmContext(schema, { includeCompetitors: false })}
 
 ${gapsBlock}
 
@@ -229,6 +226,94 @@ ${competitorExcerpts ? `COMPETITOR REFERENCES (SERP top results — differentiat
 
 ${auditHintsBlock}`
 
+  return { staticPrefix, dynamicSuffix, targetKeyword }
+}
+
+export async function generateOutlineForPage(
+  outlineId: string,
+  pageTitle: string,
+  pageUrl: string,
+  contentJobId: string,
+  sessionId: string,
+  schema: SessionSchema,
+  palette: PaletteData | null,
+  auditResult: AuditResult | null = null,
+  auditPageByUrl?: Map<string, AuditPageSummary>,
+  researchByUrl?: Map<string, PageResearch>
+): Promise<void> {
+  const supabase = createServerClient()
+
+  // A verbatim page (operator "bring this page over word-for-word") gets a fixed
+  // outline mirroring the captured page's own headings — no AI planning, nothing
+  // to restructure. The body is reproduced from the same snapshot at generation.
+  const { data: mode } = await supabase
+    .from('page_outlines')
+    .select('generation_mode, source_snapshot_path')
+    .eq('id', outlineId)
+    .maybeSingle()
+  if (mode?.generation_mode === 'verbatim') {
+    const markdown = mode.source_snapshot_path ? await readSnapshot(supabase, sessionId, mode.source_snapshot_path) : null
+    const outline = verbatimOutline(pageTitle, markdown)
+    await supabase
+      .from('page_outlines')
+      .update({
+        h1: outline.h1,
+        sections: asJson(outline.sections),
+        target_keyword: outline.target_keyword,
+        admin_notes: outline.notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', outlineId)
+    return
+  }
+
+  // A page named by an operator-typed exclusion is a sitemap/MBP conflict only a
+  // human can settle. Asking the model got either a refusal or copy about the
+  // excluded topic; flag it for review without a model call instead.
+  const conflict = matchingExclusion(`${pageTitle} ${pageUrl}`, operatorExclusions(schema))
+  if (conflict) {
+    console.warn(`[outline-gen] ${pageUrl} matches content exclusion "${conflict}" — flagged for review`)
+    await supabase
+      .from('page_outlines')
+      .update({
+        h1: pageTitle,
+        sections: asJson([{ h2: 'Overview', description: 'Add content here', word_count: 300 }]),
+        admin_notes: buildExclusionConflictNote(conflict),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', outlineId)
+    return
+  }
+
+  // Research for this page — prefer the batch-loaded Map (one query for the whole
+  // job); fall back to a per-page SELECT when called standalone (regenerate route).
+  let research: PageResearch | null
+  if (researchByUrl) {
+    research = researchByUrl.get(pageUrl) ?? null
+  } else {
+    const { data } = await supabase
+      .from('research_results')
+      .select('target_keyword, secondary_keywords, competitor_references, existing_content, merged_content')
+      .eq('content_job_id', contentJobId)
+      .eq('page_url', pageUrl)
+      .limit(1)
+      .maybeSingle()
+    research = data
+  }
+
+  const auditedPage = auditPageByUrl
+    ? auditPageByUrl.get(normUrl(pageUrl))
+    : auditResult?.page_analysis_summary?.find(p => normUrl(p.url) === normUrl(pageUrl))
+  const { staticPrefix, dynamicSuffix, targetKeyword } = buildOutlinePrompt({
+    pageTitle,
+    pageUrl,
+    schema,
+    palette,
+    research,
+    auditedPage,
+    noGoPhrases: (await loadNoGoPhrases()).map(p => p.phrase),
+  })
+
   // One outline attempt: call the model, record usage, and parse the JSON. A
   // non-array `sections` (Claude occasionally emits the literal "[]") counts as a
   // parse failure so the retry re-tries rather than shipping a malformed row.
@@ -250,7 +335,7 @@ ${auditHintsBlock}`
     console.warn(
       `[outline-gen] page="${pageUrl}" input=${usage?.inputTokens ?? '?'} output=${usage?.outputTokens ?? '?'} cacheRead=${cache.cacheReadInputTokens} cacheWrite=${cache.cacheCreationInputTokens} finish=${finishReason} elapsedMs=${Date.now() - callStartedAt}`
     )
-    checkTokenBudget('outline', pageUrl, usage?.inputTokens, 3000)
+    checkTokenBudget('outline', pageUrl, usage?.inputTokens, OUTLINE_INPUT_TOKEN_TARGET)
     await recordTokenUsage({
       task: 'content',
       contentJobId,

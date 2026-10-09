@@ -5,12 +5,26 @@
 // TypeErrors deep inside a generator, where it surfaces as a generic "generation
 // failed" note. Read dirty-able schema fields through these helpers.
 
+// A string that is really a JSON-encoded string array ('["a", "b"]', written by
+// an AI draft or import) — decoded so prompts get "a, b", not brackets and
+// quotes cut off mid-item. Anything else is not a JSON array → null.
+function jsonStringArray(s: string): string[] | null {
+  const t = s.trim()
+  if (!t.startsWith('[') || !t.endsWith(']')) return null
+  try {
+    const parsed: unknown = JSON.parse(t)
+    return Array.isArray(parsed) && parsed.every(x => typeof x === 'string') ? (parsed as string[]) : null
+  } catch {
+    return null
+  }
+}
+
 // String fields that may hold an array/object. Arrays flatten to a comma list;
 // anything else → ''. (Calling `.trim()` on a non-string took down BOTH the
 // outline and page-body generators.)
 export const str = (v: unknown): string =>
   typeof v === 'string'
-    ? v
+    ? (jsonStringArray(v)?.join(', ') ?? v)
     : Array.isArray(v)
       ? v.filter((x): x is string => typeof x === 'string').join(', ')
       : ''
@@ -22,7 +36,8 @@ export const str = (v: unknown): string =>
 export const arr = <T>(v: T[] | undefined | null): T[] => {
   if (Array.isArray(v)) return v
   const u = v as unknown
-  return typeof u === 'string' && u.trim() ? ([u.trim()] as unknown as T[]) : []
+  if (typeof u !== 'string' || !u.trim()) return []
+  return (jsonStringArray(u) ?? [u.trim()]) as unknown as T[]
 }
 
 // Object-array fields (niches, services, serviceAreas, locations, team...). Two
