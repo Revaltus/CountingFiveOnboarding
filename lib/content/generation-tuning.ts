@@ -49,15 +49,29 @@ export const DESIGN_AB_CHALLENGER_MODEL = 'claude-fable-5-1'
 // A/B scripts. No route uses it until those runs justify a tier change.
 export const SONNET_5_5_CHALLENGER = 'claude-sonnet-5-5'
 
+// The previous fast tier — kept as the legacy baseline in
+// scripts/compare-fast-models.ts until Anthropic retires it.
+export const HAIKU_4_5_LEGACY = 'claude-haiku-4-5-20251001'
+
 // Interactive (streaming, operator-facing) chats. Sonnet 5.5 (replaced Sonnet 5 on
 // 2026-09-30) defaults to effort 'high', which is too slow for chat — every chat
 // route must pass chatProviderOptions() to pick its effort explicitly.
 export const INTERACTIVE_CHAT_MODEL = 'claude-sonnet-5-5'
 
 // Fast/cheap tier for classification helpers and the lightweight intake phases.
-// One constant so a future Haiku retirement is a one-line swap. NEVER pass
-// effort/thinking provider options with this model — `effort` errors on Haiku 4.5.
-export const FAST_MODEL = 'claude-haiku-4-5-20251001'
+// Haiku 5.5 replaced Haiku 4.5 on 2026-10-09 (scripts/compare-fast-models.ts,
+// brand-fit over 5 clients × 8 directions, thinking disabled): 39/40 agreement,
+// 0 failures, 1.9s vs 2.6s per call, ~$0.0002 vs $0.0018. Adaptive thinking at
+// effort low had 3 failures and was slower. Every call MUST pass
+// FAST_PROVIDER_OPTIONS (or FAST_CHAT_PROVIDER_OPTIONS): Haiku 5.5 thinks
+// adaptively by default, which adds latency and eats small maxOutputTokens caps.
+export const FAST_MODEL = 'claude-haiku-5-5'
+
+// Thinking off — the fast tier's calls are short classification/extraction jobs
+// (Haiku 4.5 ran them without thinking). fast-model-options.test.ts enforces it.
+export const FAST_PROVIDER_OPTIONS = {
+  anthropic: { thinking: { type: 'disabled' } } satisfies AnthropicProviderOptions,
+}
 
 // Every chat also turns on automatic prompt caching (AUTO_CACHE_OPTIONS): tool
 // loops resend tools + system + history on each step, which is most of chat spend.
@@ -75,15 +89,15 @@ export function chatProviderOptions(effort: 'low' | 'medium') {
   }
 }
 
-// Haiku chat branch: caching only — never effort/thinking (errors on Haiku 4.5).
+// Haiku chat branch: caching + thinking off (see FAST_PROVIDER_OPTIONS).
 export const FAST_CHAT_PROVIDER_OPTIONS = {
-  anthropic: { ...AUTO_CACHE_OPTIONS } satisfies AnthropicProviderOptions,
+  anthropic: { thinking: { type: 'disabled' }, ...AUTO_CACHE_OPTIONS } satisfies AnthropicProviderOptions,
 }
 
 // Adaptive thinking + high effort raises quality on reasoning-heavy generation.
 // `display: 'omitted'` keeps the reasoning out of the response (these callers
-// only parse the final JSON/text). NEVER apply this to a Haiku call — `effort`
-// errors on Haiku 4.5 — or to latency-sensitive interactive chat.
+// only parse the final JSON/text). Never apply this to a fast-tier call (use
+// FAST_PROVIDER_OPTIONS) or to latency-sensitive interactive chat.
 export const GENERATION_PROVIDER_OPTIONS = {
   anthropic: {
     thinking: { type: 'adaptive', display: 'omitted' },

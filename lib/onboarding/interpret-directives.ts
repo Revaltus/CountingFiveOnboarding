@@ -3,7 +3,7 @@ import type { Database } from '@/types/database'
 import type { OperatorDirective, SessionSchema } from '@/types/session-schema'
 import type { TokenContext } from '@/lib/content/token-pricing'
 import { generateMbpJson } from '@/lib/mbp/generate-json'
-import { FAST_MODEL, OUTLINE_PROVIDER_OPTIONS, PUBLISHED_CONTENT_MODEL } from '@/lib/content/generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS, OUTLINE_PROVIDER_OPTIONS, PUBLISHED_CONTENT_MODEL } from '@/lib/content/generation-tuning'
 import {
   MAX_DIRECTIVES,
   coerceDirective,
@@ -97,7 +97,7 @@ ${markdown.slice(0, 60_000)}`,
     validatePassage,
     4000,
     ctx,
-    { model: FAST_MODEL },
+    { model: FAST_MODEL, providerOptions: FAST_PROVIDER_OPTIONS },
   )
   const passage = res?.passage ?? ''
   return passage && isVerbatimSubstring(passage, markdown) ? passage : null

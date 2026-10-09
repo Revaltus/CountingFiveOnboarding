@@ -31,8 +31,11 @@ describe('chat provider options', () => {
     })
   })
 
-  it('gives the Haiku branch caching but never effort or thinking', () => {
-    expect(FAST_CHAT_PROVIDER_OPTIONS.anthropic).toEqual({ cacheControl: { type: 'ephemeral' } })
+  it('gives the fast branch caching with thinking off and no effort', () => {
+    expect(FAST_CHAT_PROVIDER_OPTIONS.anthropic).toEqual({
+      thinking: { type: 'disabled' },
+      cacheControl: { type: 'ephemeral' },
+    })
   })
 })
 

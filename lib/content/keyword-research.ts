@@ -3,7 +3,7 @@ import { checkTokenBudget } from './truncate-to-token-budget'
 import { recordTokenUsage } from './token-usage'
 import { generateJson } from './json-generation'
 import { arr, str } from './schema-coerce'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 
 const KEYWORD_MODEL = FAST_MODEL
 
@@ -30,9 +30,10 @@ export async function runKeywordResearch(
     ? `\nTHIS PAGE IS ABOUT: ${focus.label}. Prioritize search terms a ${focus.label} client would actually type — the specific audience, not generic firm-wide terms.${focusKeywords.length ? ` Build on these known keywords: ${focusKeywords.join(', ')}.` : ''}`
     : ''
 
-  // Step 1: Claude keyword generation (Haiku — no providerOptions).
+  // Step 1: Claude keyword generation (fast tier, thinking off).
   const parsed = (await generateJson({
     model: anthropic(KEYWORD_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     system: 'You are an SEO keyword researcher for CPA firms. Return JSON only, no prose.',
     prompt: `Generate search keywords for this CPA firm page.
 

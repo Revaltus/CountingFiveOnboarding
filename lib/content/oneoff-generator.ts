@@ -13,7 +13,7 @@ import { generateJson } from './json-generation'
 import { activeTeam } from './active-team'
 import { asJson } from '@/lib/supabase/json-typed'
 import type { SessionSchema } from '@/types/session-schema'
-import { FAST_MODEL, PUBLISHED_CONTENT_MODEL, OUTLINE_PROVIDER_OPTIONS } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS, PUBLISHED_CONTENT_MODEL, OUTLINE_PROVIDER_OPTIONS } from './generation-tuning'
 import { HELPER_CALL_CAP_MS, RESOURCE_CALL_CAP_MS, clipToDeadline, msUntil } from './generation-budget'
 
 const RESOLVE_MODEL = FAST_MODEL
@@ -44,10 +44,11 @@ async function resolveReferences(args: {
   sessionId: string
 }): Promise<OneOffContext> {
   if (args.pageUrls.length === 0 && args.teamNames.length === 0) return {}
-  // Haiku — no providerOptions. Best-effort: a null result just means we proceed
+  // Best-effort: a null result just means we proceed
   // without the resolved page/team context.
   const parsed = (await generateJson({
     model: anthropic(RESOLVE_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     system: 'You resolve references. Return JSON only, no prose.',
     prompt: `An admin asked a content engine: "${args.prompt}"
 

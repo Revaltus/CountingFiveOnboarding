@@ -19,11 +19,10 @@ import { updatedNavJson, updatedLlmsTxt, updatedLlmsFullTxt } from './resource-d
 import { activeTeam } from './active-team'
 import type { AuditResult, CrawledPage } from '@/types/audit-result'
 import type { SessionSchema } from '@/types/session-schema'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 
 // Find-passage-style link insertion is a narrow extraction/rewrite task, not
-// authoring — Haiku tier (and NEVER the effort/provider-options object, which
-// errors on Haiku 4.5).
+// authoring — fast tier, thinking off.
 const LINK_MODEL = FAST_MODEL
 const MAX_FORWARD_LINKS = 4
 const BODY_PROMPT_TOKENS = 6000
@@ -188,6 +187,7 @@ Return ONLY a JSON array (possibly empty):
     // Bounded: the selection row is claimed 'drafting' while this runs.
     const res = await generateText({
       model: anthropic(LINK_MODEL),
+      providerOptions: FAST_PROVIDER_OPTIONS,
       prompt,
       maxOutputTokens: 1500,
       maxRetries: 4,

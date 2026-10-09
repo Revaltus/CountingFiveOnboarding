@@ -3,8 +3,8 @@
 // numbers from the firm's free-text pricing (business.pricing) + services. The
 // operator always reviews/edits before saving; this only pre-fills the editor.
 //
-// Model tier: Haiku 4.5 (structured extraction). CLAUDE.md: NEVER send `effort`
-// or the generation provider-options object to a Haiku call — it errors.
+// Model tier: FAST_MODEL (structured extraction), thinking off via
+// FAST_PROVIDER_OPTIONS.
 // ---------------------------------------------------------------------------
 import { anthropic } from '@ai-sdk/anthropic'
 import { recordTokenUsage } from './token-usage'
@@ -12,7 +12,7 @@ import { generateJson } from './json-generation'
 import { normalizePricingConfig } from './pricing-calculator-config'
 import { DEFAULT_CALCULATOR_CONFIG, type PricingCalculatorConfig } from '@/types/pricing-calculator'
 import type { SessionSchema } from '@/types/session-schema'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 
 const SEED_MODEL = FAST_MODEL
 
@@ -59,10 +59,11 @@ Return ONLY JSON matching exactly this shape (monthly USD rates; multipliers sca
 
 Rules: 2-5 serviceLines drawn from the firm's actual services; 3 sizeTiers; exactly 3 complexityLevels (Basic 1.0, Standard ~1.3, Complex ~1.7); 0-3 addOns. Base the numbers on the pricing notes when they give figures, otherwise use sensible small-firm defaults. Output JSON only, no prose.`
 
-  // Haiku — no providerOptions. Returns null on a model/parse failure; we then
+  // Returns null on a model/parse failure; we then
   // fall back to the default config the operator can fill in manually.
   const parsed = (await generateJson({
     model: anthropic(SEED_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     system: 'You configure pricing calculators for accounting firms. Return JSON only, no prose.',
     prompt,
     firstBudget: 2500,

@@ -6,10 +6,10 @@ import { getCommandIndex } from '@/lib/admin/command-index'
 import { checkRateLimit } from '@/lib/auth/rate-limit'
 import { recordTokenUsage } from '@/lib/content/token-usage'
 import { readJsonBody } from '@/app/api/_json'
-import { FAST_MODEL } from '@/lib/content/generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from '@/lib/content/generation-tuning'
 
-// Lightweight nav classifier — never send `effort`/adaptive thinking to Haiku
-// (it errors), and this is a cheap intent lookup, so plain generateText is right.
+// Lightweight nav classifier — a cheap intent lookup on the fast tier with
+// thinking off, so the 200-token cap is all answer.
 const COMMAND_MODEL = FAST_MODEL
 // The box is a short nav command — cap what reaches the prompt.
 const MAX_QUERY_CHARS = 500
@@ -84,6 +84,7 @@ Rules: match a client/audit only when the command clearly names one from the lis
 
   const { text, usage } = await generateText({
     model: anthropic(COMMAND_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     system: 'You are a precise navigation router. Return JSON only, no prose.',
     prompt: `${prompt}\n\nCOMMAND:\n${query}`,
     maxOutputTokens: 200,

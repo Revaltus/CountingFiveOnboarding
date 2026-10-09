@@ -49,6 +49,19 @@ describe('estimateCostUsd', () => {
   it('prices Sonnet 5.5 at the same $2/$10 as Sonnet 5', () => {
     expect(estimateCostUsd('claude-sonnet-5-5', M, M)).toBeCloseTo(12)
   })
+
+  it('prices Sonnet 5.5 cache reads at 0.05x input', () => {
+    // 1M input, all of it a cache read: 1M × $2 × 0.05
+    expect(estimateCostUsd('claude-sonnet-5-5', M, 0, M)).toBeCloseTo(0.1)
+  })
+
+  it('prices Haiku 5.5 by prompt length', () => {
+    expect(estimateCostUsd('claude-haiku-5-5', 50_000, 10_000)).toBeCloseTo(0.005 + 0.005)
+    // Over 100k (cache reads count toward prompt length) the whole request reprices.
+    expect(estimateCostUsd('claude-haiku-5-5', 150_000, 10_000, 100_000)).toBeCloseTo(
+      (50_000 / M) * 0.5 + (100_000 / M) * 0.5 * 0.1 + (10_000 / M) * 2.5,
+    )
+  })
 })
 
 describe('design studio model pricing', () => {

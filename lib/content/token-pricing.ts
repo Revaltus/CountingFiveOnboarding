@@ -58,7 +58,11 @@ export type TokenContext = {
 // are the published Sonnet/Haiku tier rates and may drift over time.
 // A model id missing from this map silently prices at $0, so every model used
 // anywhere in the app must have an entry here.
-const PRICING: Record<string, { input: number; output: number; cacheRead?: number }> = {
+type Rate = { input: number; output: number; cacheRead?: number }
+// `longPrompt`: a model priced by prompt length (Haiku 5.5) bills the whole
+// request at the higher rates once its prompt — uncached + cache read + cache
+// write — exceeds `threshold` tokens.
+const PRICING: Record<string, Rate & { longPrompt?: Rate & { threshold: number } }> = {
   // Retired writing tier (kept so historical token_usage rows still price).
   'claude-opus-4-8': { input: 5, output: 25 },
   // Opus 5.5 bills cache hits at 0.05x input rather than the standard 0.1x.
@@ -70,11 +74,14 @@ const PRICING: Record<string, { input: number; output: number; cacheRead?: numbe
   // $2/$10 launched as intro pricing and became the standard rate on 2026-09-01
   // (the scheduled rise to $3/$15 was cancelled).
   'claude-sonnet-5': { input: 2, output: 10 },
-  // Sonnet 5.5 (2026-09-28) kept Sonnet 5's rates, including cache and batch.
-  'claude-sonnet-5-5': { input: 2, output: 10 },
+  // Sonnet 5.5 (2026-09-28) kept Sonnet 5's input/output rates, but bills cache
+  // hits at 0.05x input ($0.10/MTok) like Opus 5.5.
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.05 },
   // Legacy interactive-chat tier (kept so historical token_usage rows still price).
   'claude-sonnet-4-6': { input: 3, output: 15 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
+  // Haiku 5.5 (2026-10-07): $0.10/$0.50 up to a 100k-token prompt, $0.50/$2.50 above.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, longPrompt: { threshold: 100_000, input: 0.5, output: 2.5 } },
 }
 
 // Anthropic prompt-cache multipliers on the input rate: writing (creating) a
@@ -101,7 +108,9 @@ export function estimateCostUsd(
     // the Token Usage dashboard. Surface it so a newly-added model id can't hide.
     console.error(`[token-pricing] unknown model "${model}" — recording $0; add it to PRICING`)
   }
-  const { input, output, cacheRead = CACHE_READ_MULTIPLIER } = rate ?? { input: 0, output: 0 }
+  // inputTokens already includes the cache portions, so it IS the prompt length.
+  const tier = rate?.longPrompt && inputTokens > rate.longPrompt.threshold ? rate.longPrompt : rate
+  const { input, output, cacheRead = CACHE_READ_MULTIPLIER } = tier ?? { input: 0, output: 0 }
   const uncachedInput = Math.max(0, inputTokens - cacheReadTokens - cacheCreationTokens)
   return (
     (uncachedInput / 1_000_000) * input +

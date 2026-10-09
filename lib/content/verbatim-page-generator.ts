@@ -9,7 +9,7 @@ import { generateMbpJson } from '@/lib/mbp/generate-json'
 import { readSnapshot } from '@/lib/onboarding/page-snapshot'
 import { normPath } from '@/lib/onboarding/directives'
 import { asJson } from '@/lib/supabase/json-typed'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 import { toSitePath } from './url-path'
 
 const IMAGE_MIME: Record<string, string> = {
@@ -294,7 +294,7 @@ ${content.slice(0, 6000)}`,
       validateSeo,
       600,
       { task: 'content', stage: 'content', sessionId: input.sessionId, contentJobId: input.contentJobId, pageUrl: input.pageUrl },
-      { model: FAST_MODEL },
+      { model: FAST_MODEL, providerOptions: FAST_PROVIDER_OPTIONS },
     )) ?? { meta_title: input.pageTitle.slice(0, 70), meta_description: firstProse(body) }
 
   const host = new URL(origin).host

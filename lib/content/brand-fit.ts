@@ -4,7 +4,7 @@ import { buildBrandVoiceBlock } from './brand-voice'
 import { extractJson } from './extract-json'
 import { recordTokenUsage } from './token-usage'
 import type { SessionSchema } from '@/types/session-schema'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 import { HELPER_CALL_CAP_MS } from './generation-budget'
 
 const BRAND_FIT_MODEL = FAST_MODEL
@@ -64,7 +64,7 @@ Return ONLY JSON:
   try {
     const { text, usage } = await generateText({
       model: anthropic(modelId),
-      providerOptions: args.model?.providerOptions,
+      providerOptions: args.model ? args.model.providerOptions : FAST_PROVIDER_OPTIONS,
       system: 'You are a meticulous brand steward. Return JSON only, no prose.',
       prompt,
       // An off-brand verdict with conflicts + an amendment runs 500+ tokens;

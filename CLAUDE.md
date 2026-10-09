@@ -138,7 +138,7 @@ Interactive chat (`/api/chat`) stays Sonnet/Haiku — never use Sonnet for phase
 ```typescript
 const modelId = [3, 4].includes(session.current_phase) ? INTERACTIVE_CHAT_MODEL : FAST_MODEL
 ```
-Tier map (reviewed 2026-09-30 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 4.5 lineup):
+Tier map (reviewed 2026-10-09 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5 lineup):
 - **Sonnet 5.5** (`PUBLISHED_CONTENT_MODEL`) — all async content writing: the published
   page-body generator (`lib/content/content-generator.ts`) and the audit→session draft
   (`lib/session-draft/draft-from-audit.ts`), plus outlines, sitemap proposal, MBP/draft JSON and
@@ -166,9 +166,15 @@ Tier map (reviewed 2026-09-30 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Ha
 - **Sonnet 5.5** (`QA_SPECIALIST_MODEL`) — QA Desk specialists (Accuracy, Copy Editor, SEO/GEO, Structure)
   in `lib/content/qa/specialists/`. The judge is `CRITIC_MODEL` (Opus 5.5), so no tier grades its own
   work. A/B with `scripts/compare-qa.ts`.
-- **Haiku 4.5** (`FAST_MODEL`) — phase 1/2/5/6 intake chat and classification helpers (brand-fit,
+- **Haiku 5.5** (`FAST_MODEL`) — phase 1/2/5/6 intake chat and classification helpers (brand-fit,
   keyword, reverse-link, oneoff resolve, pricing seeds, article-import links, command bar).
-  Retirement "not sooner than 2026-10-15"; when it's deprecated, swap `FAST_MODEL` in one place.
+  - Replaced Haiku 4.5 on 2026-10-09 (`scripts/compare-fast-models.ts`, brand-fit over 5 clients × 8 directions):
+    39/40 agreement, 0 failures, 1.9s vs 2.6s per call, ~$0.0002 vs $0.0018 per call.
+  - Every call passes `FAST_PROVIDER_OPTIONS` (thinking off) or `FAST_CHAT_PROVIDER_OPTIONS`;
+    `lib/content/fast-model-options.test.ts` enforces it. Haiku 5.5 thinks adaptively by default,
+    which adds latency and eats small `maxOutputTokens` caps. Adaptive at effort `low` had 3/40 failures.
+  - Priced by prompt length: $0.10/$0.50 up to 100k prompt tokens, $0.50/$2.50 above (`longPrompt` in `PRICING`).
+  - Its tokenizer counts ~30% more tokens than Haiku 4.5, so the phase 1/5–6 budgets above read ~30% higher.
 - **Sonnet 5.5** (`DESIGN_MODEL`) — Design Studio concept generation and revision (admin-only,
   a few runs per client). Replaced Opus 5.5 on 2026-09-30 after the bblcpa A/B (3 concepts each,
   Sonnet 5 judge):
@@ -185,7 +191,8 @@ Tier map (reviewed 2026-09-30 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Ha
 
 The async generation paths use adaptive thinking + `effort` via the shared
 `GENERATION_PROVIDER_OPTIONS` in `lib/content/generation-tuning.ts`. Hard rules:
-- **Never** send `effort` (or any of those provider-options objects) to a Haiku call — it errors on Haiku 4.5.
+- Never send `GENERATION_PROVIDER_OPTIONS` (or any high-effort options) to a fast-tier call — use `FAST_PROVIDER_OPTIONS`.
+- Haiku 5.5 rejects an assistant prefill (a final assistant turn), even with thinking off — end `messages` with a user turn.
 - `budget_tokens` is deprecated — use `thinking: { type: 'adaptive' }`.
 - Never set `temperature`/`top_p`/`top_k` — Sonnet 5.5 and Opus 5.5 return a 400 on non-default values.
 - Sonnet 5.5 (like Opus 5.5) rejects forced tool use (`toolChoice`) and `thinking: { type: 'disabled' }`. Its lowest setting is `between_tools`.

@@ -5,7 +5,7 @@ import { splitFile, serializeFile, type PageFile } from '@/lib/editor/frontmatte
 import { checkTokenBudget, truncateToTokenBudget } from './truncate-to-token-budget'
 import { recordTokenUsage } from './token-usage'
 import { titleFromSlug } from './internal-link-targets'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 import { HELPER_CALL_CAP_MS, clipToDeadline, msUntil } from './generation-budget'
 
 // Find-passage is a narrow extraction/rewrite task (return one verbatim
@@ -182,6 +182,7 @@ Return ONLY JSON:
 
   const { text, usage } = await generateText({
     model: anthropic(REVERSE_LINK_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     prompt,
     maxOutputTokens: 800,
     maxRetries: 4,

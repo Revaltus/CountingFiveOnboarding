@@ -20,8 +20,8 @@ type Usage = Awaited<ReturnType<typeof generateText>>['usage']
 // API key, permission denied — lib/ai/provider-rejection.ts) skips the retry:
 // it would fail identically.
 //
-// IMPORTANT: pass `providerOptions` ONLY for non-Haiku models — `effort` errors on
-// Haiku 4.5. Omit it entirely for Haiku calls.
+// Fast-tier (Haiku) callers pass FAST_PROVIDER_OPTIONS (thinking off); the
+// heavier generation options are for Sonnet/Opus calls.
 // Every caller is an async (non-interactive) generator running inside a function
 // with a hard maxDuration; none of them previously passed a timeout of any kind.
 const DEFAULT_JSON_CALL_TIMEOUT_MS = 120_000

@@ -1,11 +1,12 @@
 {
-  "lastReview": "2026-09-30",
-  "note": "2026-09-30 review: writer+chats+design gen → Sonnet 5.5 (A/B-backed); critics stay Opus 5.5 (content + new DESIGN_CRITIC_MODEL); Haiku 4.5 kept (Sonnet 5.5 low = tested fallback)",
+  "lastReview": "2026-10-09",
+  "note": "2026-10-09 review: FAST_MODEL Haiku 4.5 → Haiku 5.5 (thinking off; A/B 39/40 agree, 0 fail, 26% faster, ~9x cheaper); other tiers unchanged; Sonnet 5.5 cacheRead 0.05x pricing fix",
   "reviewEveryDays": 45,
   "knownModels": [
     "claude-fable-5",
     "claude-fable-5-1",
     "claude-haiku-4-5-20251001",
+    "claude-haiku-5-5",
     "claude-opus-4-5-20251101",
     "claude-opus-4-6",
     "claude-opus-4-7",
@@ -24,14 +25,9 @@
     "DESIGN_CRITIC_MODEL": "claude-opus-5-5",
     "DESIGN_AB_CHALLENGER_MODEL": "claude-fable-5-1",
     "SONNET_5_5_CHALLENGER": "claude-sonnet-5-5",
+    "HAIKU_4_5_LEGACY": "claude-haiku-4-5-20251001",
     "INTERACTIVE_CHAT_MODEL": "claude-sonnet-5-5",
-    "FAST_MODEL": "claude-haiku-4-5-20251001"
+    "FAST_MODEL": "claude-haiku-5-5"
   },
-  "watch": [
-    {
-      "model": "claude-haiku-4-5-20251001",
-      "note": "retirement not sooner than 2026-10-15; no date announced yet — set \"date\" when Anthropic announces one",
-      "fallback": "Sonnet 5.5 at effort low + between_tools (scripts/compare-fast-models.ts)"
-    }
-  ]
+  "watch": []
 }

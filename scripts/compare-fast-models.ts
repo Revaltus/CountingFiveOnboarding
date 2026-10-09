@@ -1,17 +1,20 @@
-// One-off eval for the FAST_MODEL tier (Haiku 4.5 today). Replays the brand-fit
+// One-off eval for the FAST_MODEL tier (Haiku 5.5, thinking off, since 2026-10-09). Replays the brand-fit
 // classifier — a representative short JSON helper — over real client brands and
 // a fixed set of admin directions (some deliberately off-brand), once per model,
 // and reports agreement, failures, latency and cost. Informational: it tells us
 // what the Haiku-retirement fallback would cost and whether it classifies the
 // same way. Nothing is persisted except the normal token_usage rows.
 //
-// The challenger runs at effort 'low' with `between_tools` thinking (no up-front
-// thinking; the lowest setting Sonnet 5.5 accepts). Haiku runs with no provider
-// options — `effort` errors on Haiku 4.5.
+// The baseline runs exactly as production does (FAST_PROVIDER_OPTIONS).
+//
+// Challengers (--challenger, default sonnet55):
+//   sonnet55     Sonnet 5.5, effort low + between_tools
+//   haiku45      Haiku 4.5, no provider options (the pre-2026-10-09 baseline)
+//   haiku55-low  Haiku 5.5, adaptive thinking at effort low
 //
 // Usage:
 //   npx tsx scripts/compare-fast-models.ts            # 3 most recent sessions with a brand
-//   npx tsx scripts/compare-fast-models.ts 5          # N sessions
+//   npx tsx scripts/compare-fast-models.ts 5 --challenger haiku45
 
 import * as fs from 'fs'
 import * as path from 'path'
@@ -35,10 +38,12 @@ const DIRECTIONS = [
   'Fear-based copy telling readers the IRS is coming for them unless they call today.',
 ]
 
+const warn0 = (...a: unknown[]) => console.warn(...a)
+
 async function main() {
   const { createServerClient } = await import('../lib/supabase/server')
   const { checkBrandFit } = await import('../lib/content/brand-fit')
-  const { FAST_MODEL, SONNET_5_5_CHALLENGER } = await import('../lib/content/generation-tuning')
+  const { FAST_MODEL, FAST_PROVIDER_OPTIONS, SONNET_5_5_CHALLENGER, HAIKU_4_5_LEGACY } = await import('../lib/content/generation-tuning')
   type SessionSchema = import('../types/session-schema').SessionSchema
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.ANTHROPIC_API_KEY) {
@@ -46,15 +51,31 @@ async function main() {
     process.exit(1)
   }
   const supabase = createServerClient()
-  const limit = Number(process.argv[2] ?? 3) || 3
+  const argv = process.argv.slice(2)
+  const ci = argv.indexOf('--challenger')
+  const challengerKey = ci >= 0 ? argv[ci + 1] : 'sonnet55'
+  const limit = Number(argv.find((a, i) => /^\d+$/.test(a) && argv[i - 1] !== '--challenger') ?? 3) || 3
 
-  const contenders = [
-    { id: FAST_MODEL, providerOptions: undefined },
-    {
+  const challengers = {
+    sonnet55: {
       id: SONNET_5_5_CHALLENGER,
       providerOptions: { anthropic: { thinking: { type: 'between_tools' as const }, effort: 'low' as const } },
     },
-  ]
+    haiku45: { id: HAIKU_4_5_LEGACY, providerOptions: undefined },
+    'haiku55-low': {
+      id: FAST_MODEL,
+      providerOptions: { anthropic: { thinking: { type: 'adaptive' as const }, effort: 'low' as const } },
+    },
+  }
+  const challenger = challengers[challengerKey as keyof typeof challengers]
+  if (!challenger) {
+    console.error(`Unknown --challenger "${challengerKey}" (expected ${Object.keys(challengers).join(' | ')})`)
+    process.exit(1)
+  }
+  warn0(`challenger: ${challengerKey} (${challenger.id})`)
+  if (challenger.id === FAST_MODEL) warn0('  (same model id as the baseline — the $/call figures below are pooled across both)')
+
+  const contenders = [{ id: FAST_MODEL, providerOptions: FAST_PROVIDER_OPTIONS }, challenger]
 
   const { data: jobs, error } = await supabase
     .from('content_jobs')

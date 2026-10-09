@@ -4,8 +4,8 @@
 // captured from the client's current site (_meta.audit_context.pricing). The
 // operator always reviews/edits before saving; this only pre-fills the editor.
 //
-// Model tier: Haiku 4.5 (structured extraction). CLAUDE.md: NEVER send `effort`
-// or the generation provider-options object to a Haiku call — it errors.
+// Model tier: FAST_MODEL (structured extraction), thinking off via
+// FAST_PROVIDER_OPTIONS.
 // ---------------------------------------------------------------------------
 import { anthropic } from '@ai-sdk/anthropic'
 import { recordTokenUsage } from './token-usage'
@@ -13,7 +13,7 @@ import { generateJson } from './json-generation'
 import { normalizePricingPlansConfig } from './pricing-plans-config'
 import { DEFAULT_PLANS_CONFIG, type PricingPlansConfig } from '@/types/pricing-plans'
 import type { SessionSchema } from '@/types/session-schema'
-import { FAST_MODEL } from './generation-tuning'
+import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
 
 const SEED_MODEL = FAST_MODEL
 
@@ -79,10 +79,11 @@ Return ONLY JSON matching exactly this shape (monthly USD prices; annualPrice is
 
 Rules: 3-4 tiers escalating in price; exactly ONE tier with "isMostPopular": true (usually the middle); each tier 4-7 features with lower tiers marking some "included": false; 3-5 sharedFeatures.items; 0-3 addOns. Base numbers on the firm's pricing notes / current-site pricing when given, otherwise use sensible small-firm defaults. Output JSON only, no prose.`
 
-  // Haiku — no providerOptions. Returns null on a model/parse failure; we then
+  // Returns null on a model/parse failure; we then
   // fall back to the default config the operator can fill in manually.
   const parsed = (await generateJson({
     model: anthropic(SEED_MODEL),
+    providerOptions: FAST_PROVIDER_OPTIONS,
     system: 'You configure pricing/plans pages for professional-services firms. Return JSON only, no prose.',
     prompt,
     firstBudget: 3000,
