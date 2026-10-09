@@ -51,7 +51,23 @@ describe('normalizeQaHolds', () => {
 
   it('does nothing when no rows match', async () => {
     const supabase = makeFakeSupabase({ generated_pages: [] })
-    expect(await normalizeQaHolds(supabase, NOW)).toEqual({ approvedSkipped: 0, queuedTimedOut: 0 })
+    expect(await normalizeQaHolds(supabase, NOW)).toEqual({ approvedSkipped: 0, queuedTimedOut: 0, errorTimedOut: 0 })
     expect(supabase.updates('generated_pages')).toEqual([])
+  })
+
+  it('caps a retriable QA error that no worker has claimed for 30 minutes', async () => {
+    const supabase = makeFakeSupabase({
+      generated_pages: [{ id: 'p4', admin_approved_content: false, qa_status: 'error', qa_attempts: 1 }],
+    })
+    const r = await normalizeQaHolds(supabase, NOW)
+    expect(r.errorTimedOut).toBe(1)
+    const cutoff = new Date(NOW - QA_QUEUED_TIMEOUT_MS).toISOString()
+    const reads = supabase.selectFilters('generated_pages')
+    expect(reads[2]).toEqual(expect.arrayContaining([
+      ['eq', 'qa_status', 'error'],
+      ['lt', 'qa_attempts', QA_MAX_ATTEMPTS],
+      ['lt', 'qa_started_at', cutoff],
+    ]))
+    expect(supabase.updates('generated_pages')).toEqual([{ qa_attempts: QA_MAX_ATTEMPTS }])
   })
 })

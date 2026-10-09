@@ -15,15 +15,20 @@ export const QA_SWEEP_BATCH = 100
 //      — the human-edit fence is fail-soft and can miss one;
 //  (b) a queued row older than QA_QUEUED_TIMEOUT_MS since generation finished
 //      becomes 'error' with qa_attempts at the cap, so it's terminal and the
-//      phase-6 hold (qaOutstanding) releases.
+//      phase-6 hold (qaOutstanding) releases;
+//  (c) a retriable error row no worker has claimed for QA_QUEUED_TIMEOUT_MS
+//      (qa_started_at is stamped on every claim) gets the same treatment — when
+//      triggers never reach the QA route, qa_attempts never rises and the
+//      retriable error held phase 5 forever.
 // Both are bounded to QA_SWEEP_BATCH rows per sweep. Errors are logged, never
 // thrown — the sweep's other work must continue.
 export async function normalizeQaHolds(
   supabase: Supabase,
   nowMs: number = Date.now(),
-): Promise<{ approvedSkipped: number; queuedTimedOut: number }> {
+): Promise<{ approvedSkipped: number; queuedTimedOut: number; errorTimedOut: number }> {
   let approvedSkipped = 0
   let queuedTimedOut = 0
+  let errorTimedOut = 0
 
   const { data: approved, error: approvedErr } = await supabase
     .from('generated_pages')
@@ -68,5 +73,29 @@ export async function normalizeQaHolds(
     }
   }
 
-  return { approvedSkipped, queuedTimedOut }
+  const { data: stuckErr, error: stuckErrErr } = await supabase
+    .from('generated_pages')
+    .select('id')
+    .eq('qa_status', 'error')
+    .eq('admin_approved_content', false)
+    .lt('qa_attempts', QA_MAX_ATTEMPTS)
+    .lt('qa_started_at', cutoff)
+    .limit(QA_SWEEP_BATCH)
+  if (stuckErrErr) {
+    console.error('[qa-sweep] error time-box read failed:', stuckErrErr)
+  } else if (stuckErr?.length) {
+    // Fenced on still-error and the same stale claim, so a worker that claims
+    // it meanwhile (fresh qa_started_at) wins.
+    const { data: hit, error } = await supabase
+      .from('generated_pages')
+      .update({ qa_attempts: QA_MAX_ATTEMPTS })
+      .in('id', stuckErr.map(r => r.id))
+      .eq('qa_status', 'error')
+      .lt('qa_started_at', cutoff)
+      .select('id')
+    if (error) console.error('[qa-sweep] error time-box failed:', error)
+    else errorTimedOut = hit?.length ?? 0
+  }
+
+  return { approvedSkipped, queuedTimedOut, errorTimedOut }
 }

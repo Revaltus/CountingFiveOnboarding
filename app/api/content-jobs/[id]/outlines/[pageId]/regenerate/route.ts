@@ -6,8 +6,10 @@ import { buildOutlineFailureNote } from '@/lib/content/outline-fallback'
 import { asJson } from '@/lib/supabase/json-typed'
 import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
+import { resetStalePages } from '@/lib/content/stale-pages'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 export async function POST(
   _req: Request,
@@ -34,7 +36,7 @@ export async function POST(
   // Load session and job data
   const { data: job } = await supabase
     .from('content_jobs')
-    .select('session_id, palette')
+    .select('session_id, palette, phase')
     .eq('id', id)
     .single()
 
@@ -51,11 +53,19 @@ export async function POST(
   const schema = (session?.schema_data ?? {}) as SessionSchema
   const palette = (job.palette ?? null) as PaletteData | null
 
-  // Clear existing and regenerate
+  // Clear existing and regenerate. The claim is stamped (not cleared) so a
+  // concurrent Retry or chained outline run doesn't generate the same row too.
+  const now = new Date().toISOString()
   await supabase
     .from('page_outlines')
-    .update({ h1: null, generation_claimed_at: null, sections: '[]', admin_approved: false, admin_notes: null, updated_at: new Date().toISOString() })
+    .update({ h1: null, generation_claimed_at: now, sections: '[]', admin_approved: false, admin_notes: null, updated_at: now })
     .eq('id', pageId)
+
+  // Before generation starts (phase < 5), a page body written from the old
+  // outline is stale — send it back to pending so it's rewritten from the new one.
+  if ((job.phase ?? 0) < 5) {
+    await resetStalePages(supabase, id, [outline.page_url])
+  }
 
   try {
     await generateOutlineForPage(

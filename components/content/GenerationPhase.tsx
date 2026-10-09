@@ -167,10 +167,12 @@ export default function GenerationPhase({
           // per-page retry, or this browser is holding a stale server render. If the
           // phase prop says we're not there yet, ask the server to reconcile (idempotent
           // — advances the phase / retries any straggler) and re-render so the lock lifts.
-          if (jobPhase < 6 && !finalizedRef.current) {
+          // Phase 4 (still on Outlines) has nothing to reconcile — the server
+          // refuses generation until Start Content Generation moves it to 5.
+          if (jobPhase === 5 && !finalizedRef.current) {
             finalizedRef.current = true
             try {
-              await fetch(`/api/content-jobs/${contentJobId}/generate`, { method: 'POST' })
+              await fetch(`/api/content-jobs/${contentJobId}/generate?reconcile=1`, { method: 'POST' })
             } catch {
               // Non-fatal — the refresh below still picks up any phase the server
               // has already advanced; the cron sweep is the backstop.
@@ -466,7 +468,7 @@ export default function GenerationPhase({
             <button
               type="button"
               onClick={restartGeneration}
-              disabled={restarting}
+              disabled={restarting || jobPhase < 5}
               className="text-xs font-heading font-semibold text-brand-cyan hover:text-brand-navy transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Re-run generation for every failed page at once"
             >
@@ -614,7 +616,7 @@ export default function GenerationPhase({
                       <button
                         type="button"
                         onClick={() => regenerate(page)}
-                        disabled={regenBusy || page.status !== 'complete'}
+                        disabled={regenBusy || page.status !== 'complete' || jobPhase < 5}
                         className="text-xs font-body text-text-secondary hover:text-brand-cyan transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Re-run Claude to generate fresh content for this page. Approval (both admin and client) resets to false on regeneration."
                       >
@@ -672,7 +674,12 @@ export default function GenerationPhase({
           Pages marked &quot;Outline not approved&quot; won&apos;t generate until their outline is approved in the Outlines step — restarting won&apos;t pick them up.
         </p>
       )}
-      {status.complete + status.error < status.total && (
+      {jobPhase < 5 && (
+        <p className="text-xs text-text-muted font-body">
+          Generation runs after every outline is approved and you click Start Content Generation in the Outlines step.
+        </p>
+      )}
+      {jobPhase >= 5 && status.complete + status.error < status.total && (
         <button
           onClick={restartGeneration}
           disabled={restarting}

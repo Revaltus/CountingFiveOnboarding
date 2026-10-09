@@ -5,6 +5,7 @@ import {
   buildOutlineFailureNote,
   buildOutlineRefusalNote,
   isRefusedOutline,
+  isApprovableOutline,
   isFallbackOutline,
 } from './outline-fallback'
 
@@ -54,5 +55,26 @@ describe('refused outlines', () => {
     expect(isFallbackOutline(note)).toBe(true)
     expect(note).toContain('Topic excluded.')
     expect(isFallbackOutline(buildOutlineRefusalNote(undefined))).toBe(true)
+  })
+})
+
+describe('isApprovableOutline', () => {
+  const good = { h1: 'Estate planning', sections: [{ h2: 'x' }], admin_notes: 'Keep it warm.' }
+
+  it('accepts a real outline', () => {
+    expect(isApprovableOutline(good)).toBe(true)
+    expect(isApprovableOutline({ ...good, admin_notes: null })).toBe(true)
+  })
+
+  it('rejects a placeholder still carrying the Needs review note', () => {
+    expect(isApprovableOutline({ ...good, admin_notes: OUTLINE_FALLBACK_NOTE })).toBe(false)
+    expect(isApprovableOutline({ ...good, admin_notes: buildOutlineRefusalNote('excluded') })).toBe(false)
+  })
+
+  it('rejects a blank h1 or empty sections', () => {
+    expect(isApprovableOutline({ ...good, h1: '  ' })).toBe(false)
+    expect(isApprovableOutline({ ...good, h1: null })).toBe(false)
+    expect(isApprovableOutline({ ...good, sections: [] })).toBe(false)
+    expect(isApprovableOutline({ ...good, sections: 'x' })).toBe(false)
   })
 })

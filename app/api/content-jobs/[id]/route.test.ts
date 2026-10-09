@@ -14,7 +14,7 @@ const h = vi.hoisted(() => ({
     palette?: unknown
     design_tokens?: unknown
   },
-  outlines: [{ admin_approved: true }] as Array<{ admin_approved: boolean }>,
+  outlines: [] as Array<{ admin_approved: boolean; h1?: string; sections?: unknown[]; admin_notes?: string | null }>,
   firmName: 'Acme CPA' as string | null,
   importableArticles: [] as Array<{ url: string }>,
   after: vi.fn(),
@@ -58,12 +58,14 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { PATCH } from './route'
 
+const REAL_OUTLINE = { admin_approved: true, h1: 'A page', sections: [{ h2: 'One' }], admin_notes: null }
+
 const params = Promise.resolve({ id: '11111111-1111-1111-1111-111111111111' })
 const patchPhase5 = () =>
   PATCH(new Request('http://test', { method: 'PATCH', body: JSON.stringify({ phase: 5 }) }), { params })
 
 beforeEach(() => {
-  h.outlines = [{ admin_approved: true }]
+  h.outlines = [REAL_OUTLINE]
   h.job = {
     phase: 4,
     session_id: 'sess-1',
@@ -119,11 +121,18 @@ describe('PATCH /api/content-jobs/[id] — phase 5 gates', () => {
   })
 
   it('blocks (422) crossing into phase 5 while any outline is unapproved', async () => {
-    h.outlines = [{ admin_approved: true }, { admin_approved: false }]
+    h.outlines = [REAL_OUTLINE, { ...REAL_OUTLINE, admin_approved: false }]
     const res = await patchPhase5()
     expect(res.status).toBe(422)
     const body = (await res.json()) as { error: string }
     expect(body.error).toMatch(/Approve every outline/i)
+    expect(h.after).not.toHaveBeenCalled()
+  })
+
+  it('blocks (422) when an approved outline is still a review-flagged placeholder', async () => {
+    h.outlines = [REAL_OUTLINE, { ...REAL_OUTLINE, admin_notes: '⚠ Needs review — the outline generator declined this page: excluded.' }]
+    const res = await patchPhase5()
+    expect(res.status).toBe(422)
     expect(h.after).not.toHaveBeenCalled()
   })
 

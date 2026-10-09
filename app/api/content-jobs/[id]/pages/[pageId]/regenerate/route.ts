@@ -25,6 +25,14 @@ export async function POST(
   // invocation's maxDuration).
   const deadlineAt = Date.now() + PAGE_DEADLINE_DEFAULT_MS
 
+  const { data: job } = await supabase.from('content_jobs').select('phase').eq('id', id).single()
+  if ((job?.phase ?? 0) < 5) {
+    return NextResponse.json(
+      { error: 'Approve every outline and click Start Content Generation first.' },
+      { status: 409 },
+    )
+  }
+
   // pageId is the generated_pages id; map to its outline.
   const { data: genPage } = await supabase
     .from('generated_pages')

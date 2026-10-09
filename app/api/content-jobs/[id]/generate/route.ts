@@ -1,7 +1,7 @@
 import { after, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireContentJobAccess } from '@/lib/auth/access'
-import { runContentGeneration } from '@/lib/content/content-generator'
+import { runContentGeneration, maybeCompleteAfterQa } from '@/lib/content/content-generator'
 import { isCronBearer } from '@/lib/auth/cron-bearer'
 
 export const runtime = 'nodejs'
@@ -15,7 +15,11 @@ export async function POST(
   //   1. Admin session — when a human clicks Restart in the UI.
   //   2. Bearer CRON_SECRET — when runContentGeneration chains itself across
   //      function lifecycles for jobs too large to finish in one invocation.
+  // `?reconcile=1` is the UI's automatic call when its poll sees generation
+  // settled but the page still shows a phase below 6. It must not act like a
+  // Restart: resetting attempts there re-ran capped-out pages on every poll cycle.
   const isInternalChain = isCronBearer(req)
+  const reconcile = new URL(req.url).searchParams.get('reconcile') === '1'
 
   const { id } = await params
 
@@ -30,12 +34,39 @@ export async function POST(
 
   const { data: job } = await supabase
     .from('content_jobs')
-    .select('session_id, created_by')
+    .select('session_id, created_by, phase')
     .eq('id', id)
     .single()
 
   if (!job) {
     return NextResponse.json({ error: 'Content job not found' }, { status: 404 })
+  }
+
+  // Generation belongs to phase 5+. Starting it from the Outlines step skipped
+  // the phase-5 gates (library/article review, firm name), ran QA report-only,
+  // and left pages that went stale when their outline was later edited.
+  if ((job.phase ?? 0) < 5) {
+    return NextResponse.json(
+      { error: 'Approve every outline and click Start Content Generation first.' },
+      { status: 409 },
+    )
+  }
+
+  if (reconcile) {
+    // Finish the job if it's done (sends the email + promotes the audit folder);
+    // otherwise resume remaining work at phase 5 without touching attempts.
+    const completed = await maybeCompleteAfterQa(supabase, id)
+    if (!completed && job.phase === 5) {
+      const sessionId = job.session_id
+      after(async () => {
+        try {
+          await runContentGeneration(id, sessionId)
+        } catch (err) {
+          console.error('[content-gen] Reconcile run failed:', err)
+        }
+      })
+    }
+    return NextResponse.json({ success: true, reconciled: completed })
   }
 
   // Record who kicked off generation so background token rows attribute to them.

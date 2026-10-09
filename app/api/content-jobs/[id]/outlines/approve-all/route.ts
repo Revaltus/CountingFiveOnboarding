@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireContentJobAccess } from '@/lib/auth/access'
+import { isApprovableOutline } from '@/lib/content/outline-fallback'
 
 export async function POST(
   _req: Request,
@@ -13,19 +14,30 @@ export async function POST(
   const { id } = await params
   const supabase = createServerClient()
 
-  // Only approve outlines that have actually been generated (h1 set). Rows
-  // still generating (h1 null) are left untouched so we never approve an
-  // empty outline.
-  const { data, error } = await supabase
+  // Only approve real outlines. Rows still generating (h1 null) and review-flagged
+  // placeholders are left for the operator — approving a placeholder shipped a
+  // generic "Add content here" page.
+  const { data: rows, error: loadErr } = await supabase
     .from('page_outlines')
-    .update({ admin_approved: true, updated_at: new Date().toISOString() })
+    .select('id, h1, sections, admin_notes')
     .eq('content_job_id', id)
-    .not('h1', 'is', null)
-    .select('id')
+    .eq('admin_approved', false)
+  if (loadErr) {
+    return internalError('outlines:approve-all', loadErr, "Couldn't approve outlines")
+  }
+  const ids = (rows ?? []).filter(isApprovableOutline).map(r => r.id)
+  const skipped = (rows ?? []).length - ids.length
 
-  if (error) {
-    return internalError('outlines:approve-all', error, "Couldn't approve outlines")
+  if (ids.length) {
+    const { error } = await supabase
+      .from('page_outlines')
+      .update({ admin_approved: true, updated_at: new Date().toISOString() })
+      .eq('content_job_id', id)
+      .in('id', ids)
+    if (error) {
+      return internalError('outlines:approve-all', error, "Couldn't approve outlines")
+    }
   }
 
-  return NextResponse.json({ approved: data?.length ?? 0 })
+  return NextResponse.json({ approved: ids.length, skipped })
 }

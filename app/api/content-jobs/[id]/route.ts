@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireContentJobAccess } from '@/lib/auth/access'
+import { isApprovableOutline } from '@/lib/content/outline-fallback'
 import { readJsonBody } from '@/app/api/_json'
 import { runContentGeneration } from '@/lib/content/content-generator'
 import { discoverImportableArticles } from '@/lib/content/article-import-discovery'
@@ -94,10 +95,11 @@ export async function PATCH(
       // unapproved ones left `pending` rows that never move.
       const { data: outlines, error: outlineErr } = await supabase
         .from('page_outlines')
-        .select('admin_approved')
+        .select('admin_approved, h1, sections, admin_notes')
         .eq('content_job_id', id)
       if (outlineErr) return internalError('content-jobs:patch', outlineErr, "Couldn't load outlines")
-      const unapproved = (outlines ?? []).filter(o => !o.admin_approved).length
+      // A placeholder approved before the approve gates existed still counts as unapproved.
+      const unapproved = (outlines ?? []).filter(o => !o.admin_approved || !isApprovableOutline(o)).length
       if (!outlines?.length || unapproved > 0) {
         return NextResponse.json(
           {

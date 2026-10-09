@@ -13,6 +13,7 @@ import { MAX_IMPORT_ATTEMPTS } from '@/lib/content/article-import-inclusion'
 import { sweepStuckDesignRows } from '@/lib/design/sweep'
 import { nudgeStalledDesignRuns } from '@/lib/design/run-nudge'
 import { requireCronBearer } from '@/lib/auth/cron-bearer'
+import { selectOutlineJobsToResume } from '@/lib/content/outline-resume'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -325,7 +326,7 @@ export async function GET(req: Request) {
   const { data: liveGen } = genJobIds.length
     ? await supabase
         .from('generated_pages')
-        .select('content_job_id, generation_status, generation_attempts')
+        .select('content_job_id, page_url, generation_status, generation_attempts')
         .in('content_job_id', genJobIds)
         .or(
           `generation_status.in.(pending,running),and(generation_status.eq.error,generation_attempts.lt.${MAX_GENERATION_ATTEMPTS})`
@@ -333,7 +334,20 @@ export async function GET(req: Request) {
         .limit(5000)
     : { data: [] }
 
-  const resumableJobs = selectResumableContentJobs(liveGen ?? []).slice(0, 5)
+  // Only approved outlines are ever generated; an unapproved `pending` row made a
+  // job look resumable forever and burned a resume slot every tick.
+  const { data: approvedOutlines } = genJobIds.length
+    ? await supabase
+        .from('page_outlines')
+        .select('content_job_id, page_url')
+        .in('content_job_id', genJobIds)
+        .eq('admin_approved', true)
+        .limit(5000)
+    : { data: [] }
+  const approvedKeys = new Set((approvedOutlines ?? []).map((o) => `${o.content_job_id}|${o.page_url}`))
+  const resumableJobs = selectResumableContentJobs(
+    (liveGen ?? []).filter((p) => approvedKeys.has(`${p.content_job_id}|${p.page_url}`)),
+  ).slice(0, 5)
 
   let generationResumed = 0
   const resumeBase = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
@@ -369,9 +383,9 @@ export async function GET(req: Request) {
     // no worker claimed in 30 min → terminal error (attempts at the cap).
     const holds = await normalizeQaHolds(supabase)
     qaApprovedSkipped = holds.approvedSkipped
-    qaQueuedTimedOut = holds.queuedTimedOut
+    qaQueuedTimedOut = holds.queuedTimedOut + holds.errorTimedOut
     if (qaApprovedSkipped || qaQueuedTimedOut) {
-      console.warn(`[sweep-stuck-jobs] qa holds normalised approvedSkipped=${qaApprovedSkipped} queuedTimedOut=${qaQueuedTimedOut}`)
+      console.warn(`[sweep-stuck-jobs] qa holds normalised approvedSkipped=${qaApprovedSkipped} queuedTimedOut=${holds.queuedTimedOut} errorTimedOut=${holds.errorTimedOut}`)
     }
     const qaCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
     const { data: qaStale } = await supabase
@@ -397,6 +411,38 @@ export async function GET(req: Request) {
       }
     }
     if (qaJobsFinalized) console.warn(`[sweep-stuck-jobs] qa-held jobs finalized=${qaJobsFinalized}`)
+  }
+
+  // Outlines: a phase-4 job with unwritten outlines (h1 null) and no live claim
+  // lost its worker — re-trigger /outlines/generate. The runner's per-row claim
+  // makes an overlapping re-trigger a no-op.
+  const { data: outlineJobs } = await supabase
+    .from('content_jobs')
+    .select('id')
+    .eq('phase', 4)
+    .order('updated_at', { ascending: true })
+    .limit(50)
+  let outlinesResumed = 0
+  if (resumeBase && outlineJobs?.length) {
+    const { data: oRows } = await supabase
+      .from('page_outlines')
+      .select('content_job_id, h1, generation_claimed_at')
+      .in('content_job_id', outlineJobs.map((j) => j.id))
+      .is('h1', null)
+      .limit(2000)
+    const url = resumeBase.startsWith('http') ? resumeBase : `https://${resumeBase}`
+    for (const jobId of selectOutlineJobsToResume(oRows ?? [], Date.now())) {
+      try {
+        const res = await fetch(`${url}/api/content-jobs/${jobId}/outlines/generate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${cronSecret}` },
+        })
+        if (res.ok) outlinesResumed += 1
+      } catch (err) {
+        console.error('[sweep-stuck-jobs] outline auto-resume failed for', jobId, err)
+      }
+    }
+    if (outlinesResumed) console.warn(`[sweep-stuck-jobs] outline generation auto-resumed jobs=${outlinesResumed}`)
   }
 
   // Research: a phase-3 job with pending/error research rows, nothing running,
@@ -654,6 +700,6 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ researchSwept, pagesSwept, ideasSwept, socialsSwept, oneoffsSwept, auditsSwept, batchTargetsSwept, newPagesSwept, librarySelectionsSwept, articleImportsSwept, whoisRetried, generationResumed, batchesResumed, auditBatchesResumed, librarySelectionsResumed, articleImportsResumed,
+  return NextResponse.json({ researchSwept, pagesSwept, ideasSwept, socialsSwept, oneoffsSwept, auditsSwept, batchTargetsSwept, newPagesSwept, librarySelectionsSwept, articleImportsSwept, whoisRetried, generationResumed, outlinesResumed, batchesResumed, auditBatchesResumed, librarySelectionsResumed, articleImportsResumed,
     researchResumed, qaSwept, qaRetriggered, qaJobsFinalized, qaApprovedSkipped, qaQueuedTimedOut, designInputsSwept: designSwept.inputs, designRunsSwept: designSwept.runs, designConceptsSwept: designSwept.concepts, designRendersRemoved: designOrphans.renders, designAttachmentsRemoved: designOrphans.attachments, designRunRendersRemoved: designOrphans.runRenders, cutoff })
 }

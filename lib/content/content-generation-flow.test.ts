@@ -6,6 +6,7 @@ import {
   completeContentJob,
   maybeCompleteAfterQa,
   MAX_GENERATION_ATTEMPTS,
+  isStubBody,
 } from './content-generator'
 
 afterEach(() => { vi.unstubAllEnvs() })
@@ -113,7 +114,7 @@ describe('selectResumableContentJobs', () => {
 })
 
 // Minimal chainable Supabase stub: from().select().eq() resolves to {data},
-// from().update().eq() records the write, from().select().eq().single() for the
+// from().update() records the write, from().select().eq().single() for the
 // phase read. Enough to exercise finalizeGenerationIfComplete's branches.
 function makeSupabaseStub(opts: {
   pages: Array<{ page_url?: string; generation_status: string; generation_attempts?: number; qa_status?: string | null; qa_attempts?: number | null }>
@@ -131,13 +132,22 @@ function makeSupabaseStub(opts: {
         const data = opts.approvedUrls ? opts.approvedUrls.map(page_url => ({ page_url })) : null
         return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data }) }) }) }
       }
-      // content_jobs
+      if (table === 'sessions') {
+        return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { schema_data: {} } }) }) }) }
+      }
+      if (table === 'audit_runs') {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [] }) }) }
+      }
+      // content_jobs — finalize goes through completeContentJob's fenced
+      // update(...).eq('id').eq('phase', 5).select().
       return {
-        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { phase: opts.phase } }) }) }),
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { phase: opts.phase, session_id: 'sess-1' } }) }) }),
         update: (vals: Record<string, unknown>) => {
           updates.push(vals)
-          const done = Promise.resolve({ data: null, error: null })
-          const chain: Record<string, unknown> = { eq: () => chain, then: done.then.bind(done) }
+          const chain: Record<string, unknown> = {
+            eq: () => chain,
+            select: () => Promise.resolve({ data: opts.phase === 5 ? [{ id: 'job-1' }] : [], error: null }),
+          }
           return chain
         },
       }
@@ -370,5 +380,19 @@ describe('maybeCompleteAfterQa', () => {
     })
     expect(await maybeCompleteAfterQa(supabase, 'job-1')).toBe(false)
     expect(state.phaseWrites).toBe(0)
+  })
+})
+
+describe('isStubBody', () => {
+  it('flags a refusal-length body on a normal page', () => {
+    expect(isStubBody(40, 1000)).toBe(true)
+    expect(isStubBody(0, null)).toBe(true)
+  })
+
+  it('passes a real page and a short-target page', () => {
+    expect(isStubBody(900, 1000)).toBe(false)
+    // contact/privacy pages: a 300-word target only trips under 75 words
+    expect(isStubBody(110, 300)).toBe(false)
+    expect(isStubBody(60, 300)).toBe(true)
   })
 })

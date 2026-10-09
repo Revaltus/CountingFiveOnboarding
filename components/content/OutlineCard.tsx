@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import OutlineSectionRow from './OutlineSectionRow'
-import { isFallbackOutline } from '@/lib/content/outline-fallback'
+import { isApprovableOutline, isFallbackOutline } from '@/lib/content/outline-fallback'
 import type { Json } from '@/types/database'
 
 type Section = { h2: string; description: string; word_count: number }
@@ -110,6 +110,7 @@ export default function OutlineCard({
   }
 
   const needsReview = !outline.admin_approved && isFallbackOutline(outline.admin_notes)
+  const canApprove = !outline.admin_approved && isApprovableOutline(outline)
 
   const statusBadge = outline.admin_approved
     ? { label: 'Approved', cls: 'bg-success/10 text-success' }
@@ -272,7 +273,7 @@ export default function OutlineCard({
         </button>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
           {/* Inline approve so a ready outline can be signed off without expanding. */}
-          {outline.h1 && !outline.admin_approved && (
+          {canApprove && (
             <button
               type="button"
               onClick={() => approve(false)}
@@ -414,7 +415,7 @@ export default function OutlineCard({
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-1">
-            {!outline.admin_approved && (
+            {canApprove && (
               <button
                 onClick={() => approve(false)}
                 disabled={saving}
@@ -423,7 +424,7 @@ export default function OutlineCard({
                 {saving ? 'Saving...' : 'Approve'}
               </button>
             )}
-            {!outline.admin_approved && hasNextPending && (
+            {canApprove && hasNextPending && (
               <button
                 onClick={() => approve(true)}
                 disabled={saving}

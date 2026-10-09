@@ -25,6 +25,7 @@ import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
 import type { AuditResult } from '@/types/audit-result'
 import { asJson } from '@/lib/supabase/json-typed'
+import { OUTLINE_STALE_CLAIM_MS } from './outline-resume'
 import { readSnapshot } from '@/lib/onboarding/page-snapshot'
 
 const OUTLINE_MODEL = PUBLISHED_CONTENT_MODEL
@@ -404,7 +405,8 @@ export async function runOutlineGeneration(
   // h1 IS NULL), so Retry did nothing. Reset those rows so they're re-run.
   const blank = outlines.filter(o => o.h1 === '').map(o => o.id)
   if (blank.length) {
-    await supabase.from('page_outlines').update({ h1: null }).in('id', blank).eq('h1', '')
+    // Un-approve too: the row is about to be replaced by fresh AI output.
+    await supabase.from('page_outlines').update({ h1: null, admin_approved: false }).in('id', blank).eq('h1', '')
   }
 
   const pending = outlines.filter(o => !o.h1)
@@ -417,7 +419,7 @@ export async function runOutlineGeneration(
       // can overlap; without a claim both generated (and paid for) the same
       // outline. Only a still-unwritten row with no live claim is taken; a claim
       // older than the route's max duration is from a dead worker.
-      const staleClaim = new Date(Date.now() - OUTLINE_ROUTE_MAX_DURATION_MS - 60_000).toISOString()
+      const staleClaim = new Date(Date.now() - OUTLINE_STALE_CLAIM_MS).toISOString()
       const { data: claimed } = await supabase
         .from('page_outlines')
         .update({ generation_claimed_at: new Date().toISOString() })

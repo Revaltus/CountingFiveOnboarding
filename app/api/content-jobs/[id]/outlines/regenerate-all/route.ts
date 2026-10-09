@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api/errors'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireContentJobAccess } from '@/lib/auth/access'
 import { runOutlineGeneration } from '@/lib/content/outline-generator'
+import { resetStalePages } from '@/lib/content/stale-pages'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -19,7 +20,7 @@ export async function POST(
 
   const { data: job } = await supabase
     .from('content_jobs')
-    .select('session_id')
+    .select('session_id, phase')
     .eq('id', id)
     .single()
 
@@ -46,6 +47,8 @@ export async function POST(
   if (resetErr) {
     return internalError('outlines:regenerate-all', resetErr, "Couldn't reset outlines for regeneration")
   }
+
+  if ((job.phase ?? 0) < 5) await resetStalePages(supabase, id)
 
   // after() guarantees the work runs to completion within maxDuration on
   // Vercel, unlike a bare fire-and-forget promise (see outlines/generate).

@@ -110,6 +110,10 @@ export default function OutlinePhase({
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? 'Approve all failed')
       }
+      const { skipped } = (await res.json().catch(() => ({}))) as { skipped?: number }
+      if (skipped) {
+        setError(`${skipped} outline${skipped === 1 ? ' needs' : 's need'} review first — fix or regenerate ${skipped === 1 ? 'it' : 'them'}, then approve.`)
+      }
       // Re-fetch so the approved flags (and the enabled "Start" button) update.
       setRetryNonce(n => n + 1)
     } catch (err) {

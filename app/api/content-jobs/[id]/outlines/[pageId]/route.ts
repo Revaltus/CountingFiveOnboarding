@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api/errors'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireContentJobAccess } from '@/lib/auth/access'
 import { reviewContentForMbpImpact } from '@/lib/mbp/impact-review'
+import { isApprovableOutline } from '@/lib/content/outline-fallback'
 import type { Json } from '@/types/database'
 
 // Fields that, when changed, invalidate any previously-approved generated
@@ -26,7 +27,7 @@ export async function PATCH(
   // Load current row so we can detect material changes before writing.
   const { data: existing, error: loadErr } = await supabase
     .from('page_outlines')
-    .select('id, content_job_id, page_url, h1, sections, cta')
+    .select('id, content_job_id, page_url, h1, sections, cta, admin_notes')
     .eq('id', pageId)
     .eq('content_job_id', _jobId)
     .single()
@@ -38,7 +39,14 @@ export async function PATCH(
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
-  if (body.h1 !== undefined) updates.h1 = body.h1
+  if (body.h1 !== undefined) {
+    // A blank h1 reads as "still generating" everywhere, and the runner would
+    // overwrite the row with fresh AI output.
+    if (typeof body.h1 !== 'string' || !body.h1.trim()) {
+      return NextResponse.json({ error: 'The H1 can’t be blank.' }, { status: 400 })
+    }
+    updates.h1 = body.h1
+  }
   if (body.sections !== undefined) {
     // sections must be a proper JSON array — never a string or object.
     if (!Array.isArray(body.sections)) {
@@ -70,6 +78,20 @@ export async function PATCH(
       updates.cta = { text: body.cta.text, url: body.cta.url } as Json
     } else {
       return NextResponse.json({ error: 'cta must be null or { text, url }' }, { status: 400 })
+    }
+  }
+
+  if (updates.admin_approved === true) {
+    const resulting = {
+      h1: updates.h1 ?? existing.h1,
+      sections: updates.sections ?? existing.sections,
+      admin_notes: updates.admin_notes !== undefined ? updates.admin_notes : existing.admin_notes,
+    }
+    if (!isApprovableOutline(resulting)) {
+      return NextResponse.json(
+        { error: 'This outline is still a placeholder. Fill in the sections and clear the “⚠ Needs review” note (or regenerate it) before approving.' },
+        { status: 422 },
+      )
     }
   }
 

@@ -175,6 +175,15 @@ export function selectResumableContentJobs(
 // restart — and every 5-minute cron tick that resumed the job for some other
 // page — re-attempted terminally failed pages too, burning tokens and pushing
 // their counters far past the cap (observed at 10 and 15 against a cap of 3).
+// A body far below its outline's word target is a refusal ("this topic is
+// excluded…") or a stub, not a page. Valid JSON with a 2-sentence body used to be
+// saved as `complete` and could ship. Lenient on purpose so short pages (contact,
+// privacy) pass: it trips only under BOTH 120 words and a quarter of the target.
+export function isStubBody(wordCount: number, wordCountTarget: number | null | undefined): boolean {
+  const target = wordCountTarget && wordCountTarget > 0 ? wordCountTarget : 600
+  return wordCount < Math.min(120, target * 0.25)
+}
+
 export function selectPagesToGenerate<T extends { page_url: string }>(
   outlines: T[],
   pageState: ResumablePageRow2[],
@@ -211,40 +220,11 @@ export async function finalizeGenerationIfComplete(
   supabase: ReturnType<typeof createServerClient>,
   contentJobId: string
 ): Promise<boolean> {
-  const { data: allPages } = await supabase
-    .from('generated_pages')
-    .select('page_url, generation_status, generation_attempts, qa_status, qa_attempts')
-    .eq('content_job_id', contentJobId)
-
-  if (!allPages?.length) return false
-  // Scope to approved outlines (pending rows for unapproved outlines never
-  // move). If the outline read fails, fall back to judging every page.
-  const { data: approved } = await supabase
-    .from('page_outlines')
-    .select('page_url')
-    .eq('content_job_id', contentJobId)
-    .eq('admin_approved', true)
-  const approvedUrls = approved ? new Set(approved.map(o => o.page_url)) : null
-  const { allDone } = summarizeGenerationState(allPages, approvedUrls, MAX_GENERATION_ATTEMPTS)
-  if (!allDone) return false
-  if (qaOutstanding(allPages, qaMode())) return false
-
-  const { data: job } = await supabase
-    .from('content_jobs')
-    .select('phase')
-    .eq('id', contentJobId)
-    .single()
-  // Only a job in generation (phase 5) finalizes to Deliverables.
-  if ((job?.phase ?? 0) !== 5) return false
-
-  await supabase
-    .from('content_jobs')
-    .update({ phase: 6, updated_at: new Date().toISOString() })
-    .eq('id', contentJobId)
-    // Fenced: the phase read above is separate, so never regress a job that
-    // moved on meanwhile.
-    .eq('phase', 5)
-  return true
+  // Same checks as the QA path (phase 5, every approved page terminal, no QA
+  // outstanding), and it goes through completeContentJob so a job finished by a
+  // per-page retry still sends the content-ready email and promotes the audit
+  // folder. The old direct phase write skipped both.
+  return maybeCompleteAfterQa(supabase, contentJobId)
 }
 
 export type GeneratedResult = {
@@ -1488,10 +1468,13 @@ export async function generateSinglePage(
     // A degraded result (JSON never parsed / empty body) is saved for salvage but
     // marked 'error' — not 'complete' — so it surfaces in the UI + ERRORS.md and
     // is auto-retried rather than silently shipping a broken page.
-    const degraded = result.degraded === true
+    const stub = !verbatim && result.degraded !== true && isStubBody(wcActual ?? 0, wcTarget)
+    const degraded = result.degraded === true || stub
     const degradedReason = verbatim
       ? 'Verbatim page came out empty (nothing renderable in the captured page) — re-capture it on its Audit Review instruction card; will auto-retry.'
-      : 'Content JSON failed to parse or came back empty after retries — raw draft saved for salvage; will auto-retry.'
+      : stub
+        ? `Writer returned only ${wcActual ?? 0} words (target ${wcTarget ?? '?'}) — likely a refusal or stub; draft saved for review; will auto-retry.`
+        : 'Content JSON failed to parse or came back empty after retries — raw draft saved for salvage; will auto-retry.'
 
     const { data: written, error: writeErr } = await supabase
       .from('generated_pages')

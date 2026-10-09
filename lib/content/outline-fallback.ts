@@ -36,3 +36,14 @@ export function buildOutlineRefusalNote(modelNotes: unknown): string {
     : 'no reason given'
   return `${OUTLINE_FALLBACK_PREFIX} — the outline generator declined this page: ${reason} Edit the sections or regenerate before approving.`
 }
+
+// An outline may be approved only once it's a real plan: a non-blank h1, at
+// least one section, and no "⚠ Needs review" note left on it (the operator
+// clears the note after fixing the placeholder). Approving a placeholder sent
+// "Overview / Add content here" to the writer and shipped a generic page.
+export function isApprovableOutline(o: { h1?: unknown; sections?: unknown; admin_notes?: unknown }): boolean {
+  const h1 = typeof o.h1 === 'string' ? o.h1.trim() : ''
+  if (!h1) return false
+  if (!Array.isArray(o.sections) || o.sections.length === 0) return false
+  return !isFallbackOutline(typeof o.admin_notes === 'string' ? o.admin_notes : null)
+}
