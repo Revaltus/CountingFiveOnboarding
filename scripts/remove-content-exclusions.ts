@@ -76,7 +76,7 @@ async function main() {
     if (schema.business) schema.business.contentExclusions = after as string[]
     if (meta && tracked.length !== trackedAfter.length) meta.review_exclusions = trackedAfter
     return {
-      update: { schema_data: asJson(schema), updated_at: new Date().toISOString() },
+      update: { schema_data: asJson(schema) },
       result: { removed, remaining: after, applied: true },
     }
   })

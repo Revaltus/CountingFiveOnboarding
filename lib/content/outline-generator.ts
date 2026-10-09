@@ -399,6 +399,14 @@ export async function runOutlineGeneration(
     if (!researchByUrl.has(r.page_url)) researchByUrl.set(r.page_url, r)
   }
 
+  // A model refusal used to be saved as h1 '' — counted as "still generating"
+  // by the UI and by the filter below, yet never claimable (the claim requires
+  // h1 IS NULL), so Retry did nothing. Reset those rows so they're re-run.
+  const blank = outlines.filter(o => o.h1 === '').map(o => o.id)
+  if (blank.length) {
+    await supabase.from('page_outlines').update({ h1: null }).in('id', blank).eq('h1', '')
+  }
+
   const pending = outlines.filter(o => !o.h1)
   const { skipped } = await runWithPool(
     pending,
