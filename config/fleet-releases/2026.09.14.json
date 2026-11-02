@@ -1,0 +1,23 @@
+{
+  "_note": "Template 2026.09.14 (fix/faq-crawlable). File set = the CHANGELOG 'Rollout notes (template 2026.09.13 → 2026.09.14)' list. FAQ accordion force-mounts its answers (in the HTML for crawlers) and hides them with CSS while closed. No visible change; theme.css, package.json and package-lock.json untouched.",
+  "templateVersion": "2026.09.14",
+  "notes": "FAQ answers are now readable by Google and AI tools while they stay collapsed on the page. Nothing looks different.",
+  "exclude": [
+    "\\.png$",
+    "^e2e/.*-snapshots/"
+  ],
+  "themeCss": "none",
+  "lockfile": "ignore",
+  "expectFiles": {
+    "overwrite": [
+      "CHANGELOG.md",
+      "src/components/ui/accordion.tsx",
+      "src/components/blocks/FaqAccordionClient.tsx",
+      "src/lib/theme/template-marker.test.ts"
+    ],
+    "add": [
+      "src/components/blocks/faq-accordion-crawlable.test.ts"
+    ],
+    "delete": []
+  }
+}
