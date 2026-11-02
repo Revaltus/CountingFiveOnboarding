@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { measurePageStructure, isGenericCtaLabel, MAX_CONTENT_SPLITS } from './page-structure'
 import {
   WRITING_EXAMPLES,
   PAGE_BODY_EXEMPLAR,
@@ -22,7 +23,15 @@ describe('exemplars', () => {
 
   it('the page-body exemplar demonstrates the block annotation format', () => {
     expect(PAGE_BODY_EXEMPLAR).toContain('<!-- block:')
-    expect(PAGE_BODY_EXEMPLAR).toContain('icon:')
+  })
+
+  it('the page-body exemplar follows the page-structure rules it teaches', () => {
+    const m = measurePageStructure(PAGE_BODY_EXEMPLAR.replace(/^[^\n]*\n/, ''))
+    expect(m.splitCount).toBeLessThanOrEqual(MAX_CONTENT_SPLITS)
+    expect(m.consecutiveImageBlocks).toBe(0)
+    expect(m.bulletCount).toBeGreaterThanOrEqual(3)
+    expect(m.ctaLabel).not.toBeNull()
+    expect(isGenericCtaLabel(m.ctaLabel ?? '')).toBe(false)
   })
 
   it('the outline exemplar is valid JSON with specific section descriptions', () => {

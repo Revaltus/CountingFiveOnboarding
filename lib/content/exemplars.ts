@@ -29,44 +29,52 @@ Service-card description (1-3 tight sentences, concrete, not a run-on):
   ✗ "Our comprehensive tax planning service covers federal, state, and local obligations, including quarterly estimated payments, retirement contributions, entity structure optimization, and year-end reviews to minimize your overall tax burden." (one exhausting sentence, lists everything, lands nowhere)
   ✓ "Quarterly tax planning built around your actual numbers, not last year's. We model estimated payments and entity elections before the deadline, so nothing is a surprise in April."
 
-FAQ answer (40-60 words, answer the question directly, then one useful specific):
+FAQ answer (40-80 words, answer the question directly, then one useful specific — the FAQ carries the page's depth):
   ✗ "It depends on your situation. There are many factors involved, and we'd be happy to discuss your unique needs to find the best solution for you." (evasive, no information, pure deflection)
   ✓ "For most S-corps, a reasonable salary lands between 40 and 60 percent of net profit, with the rest taken as distributions. The IRS weighs your role, hours, and industry pay data, so we document the basis for the number rather than picking a round figure."`
 
-// A compact, fully-annotated mini-page showing the house style end to end: a
-// specific opener, a content-split with a real image annotation, and a
-// service-cards block using the `### Title` + `icon:` item form. Injected into the
-// page-body generator so the dense block-annotation spec has a worked example to
-// anchor on (the biggest driver of annotation retries).
-export const PAGE_BODY_EXEMPLAR = `WORKED EXAMPLE — a strong section sequence in the exact annotation format (illustrative firm; never copy its facts):
+// A compact, fully-annotated mini-page in the user-first page skeleton
+// (page-structure.ts): short acknowledgement, a bulleted problem/solution list,
+// ONE content-split with a real image annotation, process steps, and a
+// page-specific CTA. Injected into the page-body generator so the dense
+// block-annotation spec has a worked example to anchor on.
+export const PAGE_BODY_EXEMPLAR = `WORKED EXAMPLE — a strong, lean page in the exact annotation format (illustrative firm; never copy its facts):
 
 <!-- block: intro-text | variant: centered -->
 ## Bookkeeping that tells you something
 
-Numbers you can't act on aren't worth much. We keep the books current to the week and translate them into the two or three figures that actually change what you do next.
+Numbers you can't act on aren't worth much. We keep the books current to the week and turn them into the few figures that change what you do next.
+
+<!-- block: checklist-section | variant: standalone -->
+## Where small-business books usually break
+
+- **Transactions pile up until January.** We categorize weekly, so you always know where you stand.
+- **Reports nobody reads.** You get a two-page monthly summary, not a 40-page export.
+- **Surprises at tax time.** Estimates are modeled every quarter against your real numbers.
 
 <!-- block: content-split | variant: image-right | image: monthly-close-review.jpg | alt: "Accountant reviewing a monthly close with a small business owner at a laptop" | query: "accountant small business owner reviewing finances" -->
 ## A monthly close you'll actually read
 
-Every month you get a two-page summary: cash position, margin by service line, and anything that moved more than ten percent. No 40-page export you'll never open. When a trend needs attention, we flag it before it becomes a problem, not a quarter later.
+Every month you get cash position, margin by service line, and anything that moved more than ten percent. When a trend needs attention, we flag it the same month.
 
-<!-- block: service-cards | variant: 3-col -->
-## What working with us looks like
+<!-- block: process-steps | variant: vertical -->
+## How we get you there
 
-### Weekly bookkeeping
-icon: Calculator
+### Discovery call
+We look at your current books and agree on what a useful month-end looks like.
 
-Transactions categorized weekly, not in a January scramble. You always know where you stand before you make a decision.
+### Cleanup
+We reconcile the backlog so the first close starts clean.
 
 ### Monthly close and review
-icon: FileCheck
+A clean close plus a short call to walk the numbers.
 
-A clean close plus a short call to walk the numbers. You leave knowing your margin and your next move.
+<!-- block: cta-banner | variant: color-bg -->
+## Find out what your books are telling you
 
-### Payroll and filings
-icon: Users
+Send us last month's statements and we'll walk you through the three numbers that matter most for your business.
 
-Payroll run, quarterly filings handled, deadlines tracked. One less thing that keeps you up in April.`
+[Book a bookkeeping review](/contact)`
 
 // A strong outline whose section descriptions are working briefs — each names the
 // concrete input (a niche persona, a proof point, a keyword) it draws on. Injected
@@ -76,14 +84,15 @@ export const OUTLINE_EXEMPLAR = `EXAMPLE OF A STRONG OUTLINE (note how each desc
 {
   "h1": "Accounting for construction contractors",
   "sections": [
-    { "h2": "Why contractor books break down", "description": "Open on the specific pain: profitable-on-paper contractors who are cash-poor because job costing and WIP aren't tracked. Speak to the owner/GM who prices the jobs.", "word_count": 180 },
-    { "h2": "Job costing that survives an audit", "description": "Explain how we track cost-to-complete and WIP by project; tie to the 'construction job costing' keyword and the firm's Sage Intacct expertise.", "word_count": 220 },
-    { "h2": "Timing estimated taxes around your cash cycle", "description": "Address the buying trigger — a surprise tax bill in a lumpy-revenue year. Concrete: how we schedule estimates against draw timing.", "word_count": 200 },
-    { "h2": "Bonding and lender-ready financials", "description": "Proof/authority: reference the firm's work preparing reviewed statements bonding companies accept. Names the decision the reader faces (winning bigger bids).", "word_count": 180 },
-    { "h2": "Getting started", "description": "Close with the specific first step and CTA to /contact. No filler recap.", "word_count": 120 }
+    { "h2": "Books that keep up with retainage and progress billing", "description": "Acknowledgement in the owner's own vocabulary (retainage, WIP, progress billing): we know why contractor books fall behind and we take that off your plate.", "word_count": 60 },
+    { "h2": "Where contractor cash goes missing", "description": "Problem/solution as bullets: profitable-on-paper but cash-poor, untracked job costs, surprise tax bills in lumpy years, each paired with the fix.", "word_count": 130 },
+    { "h2": "What you get every month", "description": "How it's delivered: WIP schedule, job-cost report, estimated-tax calendar, bonding-ready statements. Bullets; name the firm's Sage Intacct expertise.", "word_count": 110 },
+    { "h2": "Contractors who bid bigger with clean financials", "description": "Validation from the firm context only: the bonding-ready reviewed statements proof point. Never invent a client or number.", "word_count": 60 },
+    { "h2": "How we work with your team", "description": "Process steps: discovery call, cleanup, monthly close, quarterly planning. One or two sentences each.", "word_count": 100 },
+    { "h2": "Get a job-costing review", "description": "Page-specific CTA: a job-costing review for contractors, button 'Book a job-costing review' to /contact.", "word_count": 40 }
   ],
   "target_keyword": "accounting for construction contractors",
-  "notes": "Write to the owner-operator, not a CFO. Lead with cash flow, not compliance."
+  "notes": "Write to the owner-operator, not a CFO. Lead with cash flow, not compliance. Detail on WIP methods and bonding requirements goes in the FAQ."
 }`
 
 // Good/bad short-copy example for the interactive Generate Content assistant

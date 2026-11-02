@@ -178,7 +178,7 @@ export function buildCriticGuidance(
   }
   if (r.missing_sections && r.missing_sections.length) {
     parts.push(
-      `Cover these approved outline sections the draft skipped or under-developed — write each at real depth, not a sentence: ${r.missing_sections.join(' | ')}`,
+      `Cover these approved outline sections the draft skipped or under-developed. Give each real substance, as a short section, bullets or an FAQ answer, without lengthening the body past its limit: ${r.missing_sections.join(' | ')}`,
     )
   }
   const notes = r.notes.trim()

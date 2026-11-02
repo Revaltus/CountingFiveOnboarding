@@ -283,6 +283,7 @@ async function main(): Promise<void> {
 
     const rules = runRules({
       body: t.body,
+      pageUrl: t.pageUrl,
       metaTitle: t.metaTitle,
       metaDescription: t.metaDescription,
       heroBlock: t.heroBlock,

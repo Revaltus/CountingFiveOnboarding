@@ -5,6 +5,7 @@ import EditorTopBar, { type EditorStatus } from './EditorTopBar'
 import FileTree, { MEDIA_VIEW, RESOURCES_VIEW, ONEOFF_VIEW, CHANGES_VIEW, THEME_VIEW, CLIENT_CENTER_VIEW, EDIT_STATS_VIEW, type TreeFile } from './FileTree'
 import PageEditor from './PageEditor'
 import NavEditor from './NavEditor'
+import RestructureButton from './RestructureCompare'
 import ContentChatModal from './ContentChatModal'
 import MediaLibrary from './MediaLibrary'
 import ResourcesPanel from './ResourcesPanel'
@@ -1133,6 +1134,17 @@ export default function EditorShell({
               allowed={isAdmin || viewerIsOwner}
               onSave={() => void save()}
               onEdited={() => {
+                void reloadFile(selectedPath)
+                void refreshStatus()
+              }}
+            />
+          )}
+          {isLivePage && selPageIsFile && (
+            <RestructureButton
+              sessionId={sessionId}
+              path={selectedPath}
+              isDirty={dirty.has(selectedPath)}
+              onAccepted={() => {
                 void reloadFile(selectedPath)
                 void refreshStatus()
               }}

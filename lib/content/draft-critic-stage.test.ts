@@ -24,3 +24,22 @@ describe('scoreDraft token stage', () => {
     expect(vi.mocked(generateMbpJson).mock.calls[0][3]).toMatchObject({ stage: 'qa_judge', pageUrl: '/a' })
   })
 })
+
+describe('scoreDraft page shape', () => {
+  beforeEach(() => { vi.mocked(generateMbpJson).mockClear() })
+  const faq = [{ question: 'How is pricing set?', answer: 'A fixed monthly fee.' }]
+
+  it('shows the FAQ and the lean-page note on a skeleton page', async () => {
+    await scoreDraft({ ...input, pageUrl: '/industries/dental', faq })
+    const prompt = vi.mocked(generateMbpJson).mock.calls[0][0] as string
+    expect(prompt).toContain('PAGE SHAPE')
+    expect(prompt).toContain('How is pricing set?')
+  })
+
+  it('adds no lean-page note to other pages', async () => {
+    await scoreDraft({ ...input, pageUrl: '/about', faq })
+    const prompt = vi.mocked(generateMbpJson).mock.calls[0][0] as string
+    expect(prompt).not.toContain('PAGE SHAPE')
+    expect(prompt).toContain('How is pricing set?')
+  })
+})

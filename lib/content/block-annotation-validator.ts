@@ -7,6 +7,7 @@
 
 import { BLOCK_CATALOG, BLOCK_IDS, blockSpec, blockVariantValues, blockVariantValuesAt, variantValuesAt, type BlockSpec } from './block-catalog'
 import { parseBlockComment, rendersAsSection, templateSectionPattern } from '@/lib/editor/block-annotation'
+import { MAX_CONTENT_SPLITS } from './page-structure'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -284,19 +285,13 @@ export function validateBlockAnnotations(
     }
 
     // ------------------------------------------------------------------
-    // Warning rule 10: consecutive content-split with same variant
+    // Warning rule 10: back-to-back image-beside-text sections (the zigzag
+    // rhythm page-structure.ts retires)
     // ------------------------------------------------------------------
-    if (blockId === 'content-split' && i > 0) {
-      const prev = annotations[i - 1]
-      if (
-        prev.blockId === 'content-split' &&
-        variant !== undefined &&
-        prev.variant === variant
-      ) {
-        warnings.push(
-          `consecutive content-split sections at positions ${prev.position} and ${position} use the same variant '${variant}' — alternate image-right and image-left for visual rhythm`,
-        )
-      }
+    if (i > 0 && isImageSideBlock(blockId, variant) && isImageSideBlock(annotations[i - 1].blockId, annotations[i - 1].variant)) {
+      warnings.push(
+        `image-beside-text sections at positions ${annotations[i - 1].position} and ${position} sit back to back — separate them with a list or text section, or drop one image`,
+      )
     }
 
     // ------------------------------------------------------------------
@@ -404,6 +399,13 @@ export function validateBlockAnnotations(
     }
   }
 
+  const splitCount = annotations.filter((a) => a.blockId === 'content-split').length
+  if (splitCount > MAX_CONTENT_SPLITS) {
+    warnings.push(
+      `${splitCount} content-split sections — use at most ${MAX_CONTENT_SPLITS}; convert the rest to checklist-section (standalone), process-steps or a card grid`,
+    )
+  }
+
   return {
     passed: errors.length === 0,
     warnings,
@@ -423,6 +425,11 @@ export function validateBlockAnnotations(
 // markdown (e.g. someone hand-edited the annotation between parse and apply),
 // it's a no-op for that entry.
 // ---------------------------------------------------------------------------
+function isImageSideBlock(blockId: string, variant: string | undefined): boolean {
+  if (blockId === 'content-split') return true
+  return blockId === 'checklist-section' && !!variant && variant.startsWith('with-image')
+}
+
 export function applyCoercions(markdown: string, coercions: AnnotationCoercion[]): string {
   let result = markdown
   for (const c of coercions) {

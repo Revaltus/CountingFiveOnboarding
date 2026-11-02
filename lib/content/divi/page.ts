@@ -21,6 +21,7 @@ import {
 } from './blocks'
 import type { PricingPlansConfig } from '@/types/pricing-plans'
 import { BLOCK_CATALOG } from '@/lib/content/block-catalog'
+import { CAROUSEL_CUE, isCarouselBlock } from '@/lib/content/page-structure'
 import { DEFAULT_LAYOUT_PRESET, LAYOUT_PRESETS, LAYOUT_PRESET_NAMES, type LayoutPresets } from '@/lib/design/layout-presets'
 
 export type DiviPageInput = {
@@ -61,8 +62,13 @@ function internalizeLinks(md: string, host: string): string {
   )
 }
 
+// Carousel sections export as a static block; the cue tells whoever rebuilds
+// the page in Divi to make it a slider.
+const CAROUSEL_CUE_HTML = `<p><em>${CAROUSEL_CUE}</em></p>`
+
 function headingHtml(section: DiviSection): string {
-  return `<h2>${section.heading}</h2>\n${markdownToHtml(section.content)}`
+  const cue = isCarouselBlock(section.blockId, section.variant) ? `${CAROUSEL_CUE_HTML}\n` : ''
+  return `${cue}<h2>${section.heading}</h2>\n${markdownToHtml(section.content)}`
 }
 
 // Pull the first markdown link out of a section body for a CTA fallback.
@@ -193,7 +199,7 @@ function renderHero(page: DiviPageInput, images: Map<string, string>, body: stri
     heading: headline,
     eyebrow: page.hero_eyebrow ?? undefined,
     subhead: page.hero_subhead ?? undefined,
-    bodyHtml: '',
+    bodyHtml: isCarouselBlock(heroBlock, page.hero_variant) ? CAROUSEL_CUE_HTML : '',
     buttonText: page.cta?.text,
     buttonUrl: page.cta?.url,
     imageUrl,

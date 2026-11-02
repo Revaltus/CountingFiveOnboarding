@@ -3,6 +3,7 @@ import { activeNiches } from './active-niches'
 import { activeServices } from './active-services'
 import { blocksForPage, hasBlocks, type PageBlocks } from './page-treatment'
 import { objArr, realStrings } from './schema-coerce'
+import { LOCATION_HUBS, NICHE_HUBS, SERVICE_HUBS } from './page-hubs'
 
 // Resolve what a page IS — a specific niche, service, or location page vs. a
 // generic one — and produce a compact, directive focus block that names the exact
@@ -193,7 +194,7 @@ function resolveBaseIntent(pageUrl: string, pageTitle: string, schema: SessionSc
   if (head === 'contact' || head === 'contact-us') return { type: 'contact', focusBlock: '' }
 
   // Niche pages: /industries/{slug} (optionally /industries/{slug}/{city}).
-  if ((head === 'industries' || head === 'industry') && segs[1]) {
+  if (NICHE_HUBS.includes(head) && segs[1]) {
     const niche = matchBySlug(niches, segs[1], (n) => s(n.name))
     const citySlug = segs[2]
     const city = citySlug ? cityLabel(citySlug) : undefined
@@ -203,7 +204,7 @@ function resolveBaseIntent(pageUrl: string, pageTitle: string, schema: SessionSc
   }
 
   // Service pages: /services/{slug} (optionally /services/{slug}/{city}).
-  if ((head === 'services' || head === 'service') && segs[1]) {
+  if (SERVICE_HUBS.includes(head) && segs[1]) {
     const service = matchBySlug(services, segs[1], (sv) => s(sv.name))
     const citySlug = segs[2]
     const city = citySlug ? cityLabel(citySlug) : undefined
@@ -212,7 +213,7 @@ function resolveBaseIntent(pageUrl: string, pageTitle: string, schema: SessionSc
   }
 
   // Location pages: /locations/{city}.
-  if ((head === 'locations' || head === 'location') && segs[1]) {
+  if (LOCATION_HUBS.includes(head) && segs[1]) {
     const citySlug = segs[1]
     const city = cityLabel(citySlug)
     return { type: 'location', city, focusBlock: buildLocationFocus(city, findArea(citySlug)) }

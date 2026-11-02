@@ -2,6 +2,18 @@ import type { SessionSchema } from '@/types/session-schema'
 import { isResolved, normPath } from '@/lib/onboarding/directives'
 import { verbatimBios } from './verbatim-bios'
 
+function verbatimPageDirective(schema: SessionSchema, pageUrl: string) {
+  const key = normPath(pageUrl)
+  return (schema.operator_directives ?? []).find(
+    (d) => isResolved(d) && d.kind === 'bring_page' && d.verbatim && d.sourceUrl && normPath(d.sourceUrl) === key,
+  )
+}
+
+// A page brought over word-for-word at the client's request.
+export function isVerbatimPage(schema: SessionSchema, pageUrl: string): boolean {
+  return !!verbatimPageDirective(schema, pageUrl)
+}
+
 // System-prompt note for an AI editor working on a page that carries
 // client-supplied verbatim text: a whole page brought over word-for-word, or
 // team bios the client asked to keep exactly. Empty when neither applies.
@@ -9,10 +21,7 @@ import { verbatimBios } from './verbatim-bios'
 export function verbatimGuardNote(schema: SessionSchema, pageUrl: string | null, fileText: string): string {
   const lines: string[] = []
   if (pageUrl) {
-    const key = normPath(pageUrl)
-    const page = (schema.operator_directives ?? []).find(
-      (d) => isResolved(d) && d.kind === 'bring_page' && d.verbatim && d.sourceUrl && normPath(d.sourceUrl) === key,
-    )
+    const page = verbatimPageDirective(schema, pageUrl)
     if (page) {
       lines.push(
         `This entire page is the client's own content, brought over word-for-word at their request ("${page.sourceText}"). Do not reword, shorten, summarize or "improve" its text, and keep every link.`,

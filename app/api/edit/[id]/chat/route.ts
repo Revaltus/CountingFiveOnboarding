@@ -40,6 +40,7 @@ import {
 import type { SessionSchema } from '@/types/session-schema'
 import { verbatimGuardNote } from '@/lib/content/verbatim-guard'
 import { contentPathToUrl } from '@/lib/editor/content-paths'
+import { PAGE_STRUCTURE_RULES } from '@/lib/content/page-structure'
 
 export const runtime = 'nodejs'
 // Batched edits (apply_edits / remove_text) keep the tool-loop short, but a
@@ -209,6 +210,10 @@ These are NOT page-specific — they render on every page (footer, contact page,
 "Should I update the {phone/email/…} everywhere (footer, contact page, and every page's schema), or just here on this page?"
 - Everywhere → call update_firm_contact. It updates the shared brand.json now (publish pushes it live everywhere) and flags the firm profile (MBP) for review. Say you've updated it site-wide and flagged the profile — never say the MBP itself was changed.
 - Just this page → use apply_edit on this file only.` : ` You do NOT have a tool to change these firm-wide (that's managed by the agency, not from this editor). If the admin asks to change the phone, fax, email, hours, or address everywhere, tell them: "Firm contact details are managed by your agency — ask them to update it." You may still use apply_edit to change how a value is displayed on this one page only, if asked.`}
+
+PAGE SHAPE (when you add, convert or rewrite sections)
+${PAGE_STRUCTURE_RULES}
+Don't restructure a page unprompted: these rules shape what you add or rewrite. A full restructure is the editor's "Restructure to new layout" action.
 
 RULES
 - Make ONLY what the admin asks for. Never invent facts (credentials, numbers, named people, dates) not supported by the firm profile above or the existing file.

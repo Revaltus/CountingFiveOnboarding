@@ -76,6 +76,13 @@ describe('resolvePageIntent', () => {
     expect(intent.focusBlock).toContain('Estimated payments')
   })
 
+  it('matches service and niche pages under alternate hub paths', () => {
+    const service = resolvePageIntent('/what-we-do/tax-planning', 'Tax Planning', schema)
+    expect(service.type).toBe('service')
+    expect(service.focusBlock).toContain('Estimated payments')
+    expect(resolvePageIntent('/who-we-serve/construction-contractors', 'Contractors', schema).type).toBe('niche')
+  })
+
   it('classifies a location page and names the city', () => {
     const intent = resolvePageIntent('/locations/tyngsborough', 'Tyngsborough', schema)
     expect(intent.type).toBe('location')

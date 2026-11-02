@@ -8,6 +8,7 @@ import { RESOURCE_CALL_CAP_MS } from './generation-budget'
 import { extractJson } from './extract-json'
 import type { SessionSchema } from '@/types/session-schema'
 import type { FaqItem, InternalLink } from '@/lib/editor/structured-fields'
+import { FAQ_ANSWER_WORDS, FAQ_QUESTIONS } from './page-structure'
 
 const MODEL = PUBLISHED_CONTENT_MODEL
 
@@ -87,7 +88,7 @@ function fieldInstruction(field: SeoField, sitemapUrls: string[], selfUrl: strin
     case 'answer':
       return `Write the AIO answer_block — 2-3 sentences answering the likely search query for this page directly. Return ONLY JSON: {"answer_block": "..."}`
     case 'faq':
-      return `Generate 4-6 FAQ entries for this page — 40-60 words per answer. Return ONLY JSON: {"faq_block": [{"question": "...", "answer": "..."}]}`
+      return `Generate ${FAQ_QUESTIONS.min}-${FAQ_QUESTIONS.max} FAQ entries for this page — ${FAQ_ANSWER_WORDS.min}-${FAQ_ANSWER_WORDS.max} words per answer. The FAQ carries the page's depth: definitions, edge cases and how-it-works detail the body leaves out, without repeating the body. Return ONLY JSON: {"faq_block": [{"question": "...", "answer": "..."}]}`
     case 'eeat':
       return `List the E-E-A-T trust signals for this page — specific credential/experience claims supported by the firm profile. Return ONLY JSON: {"eeat_signals": ["..."]}`
     case 'links': {

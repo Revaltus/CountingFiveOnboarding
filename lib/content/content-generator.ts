@@ -54,6 +54,26 @@ import { asJson } from '@/lib/supabase/json-typed'
 import { stripGeneratorNotesFromBody } from './strip-generator-notes'
 import { appendMissingSourceLinks, generateVerbatimPage } from './verbatim-page-generator'
 import { enforceVerbatimBios } from './verbatim-bios'
+import {
+  FAQ_ANSWER_WORDS,
+  FAQ_QUESTIONS,
+  MAX_CONTENT_SPLITS,
+  PAGE_STRUCTURE_RULES,
+  measurePageStructure,
+  skeletonPromptFor,
+  structureViolations,
+  type StructureViolationCode,
+} from './page-structure'
+
+// Structure problems worth a full rewrite on their own (see generateAndFinalizePage).
+const RETRY_STRUCTURE_CODES: ReadonlySet<StructureViolationCode> = new Set([
+  'body_too_long',
+  'too_many_splits',
+  'consecutive_image_blocks',
+  'too_few_faqs',
+  'generic_cta',
+  'missing_cta',
+])
 
 export type Cta = { text: string; url: string }
 const DEFAULT_CTA: Cta = { text: 'Schedule a consultation', url: '/contact' }
@@ -354,7 +374,7 @@ OUTPUT: Return a JSON object with two keys:
    - schema_markup_type (e.g. "LocalBusiness", "Service", "FAQPage")
    - eeat_signals (array of specific credential/experience claims)
    - internal_links (array of {url, anchor_text, reason}. ONLY use URLs from this exact list — never invent paths: ${sitemapUrls.join(' ')}. The same rule applies to every relative link you write in the body copy.)
-   - faq_block (array of {question, answer} — 40-60 words per answer)
+   - faq_block (array of {question, answer} — ${FAQ_QUESTIONS.min}-${FAQ_QUESTIONS.max} questions, ${FAQ_ANSWER_WORDS.min}-${FAQ_ANSWER_WORDS.max} words per answer. This is where the page's depth lives: definitions, edge cases, how-it-works detail and long-tail search questions the lean body leaves out. Never repeat a body sentence.)
    - llm_citation_note (what structured claim an AI tool would most likely cite)
    - hero_block (one of: "hero", "hero-split", "page-header")
    - hero_variant (string or null — required for "hero" and "hero-split"; null for "page-header")
@@ -369,8 +389,8 @@ Before every ## section heading in the content body, emit an HTML comment on the
 <!-- block: {block-id} | variant: {variant} -->
 
 Images are MANDATORY for these blocks — always extend the annotation with image + alt + query attributes so the builder can fetch from Pexels:
-- content-split: every instance
-- checklist-section: every instance (use variant with-image)
+- content-split: every instance (at most ${MAX_CONTENT_SPLITS} per page)
+- checklist-section: only the with-image variants (the default standalone variant has no image)
 - cta-banner: only when variant is image-bg (never put image on color-bg)
 <!-- block: content-split | variant: image-right | image: services-overview.jpg | alt: "Accountants in a planning meeting around a conference table" | query: "professional team meeting modern office" -->
 
@@ -379,7 +399,7 @@ The "image:" attribute is a short kebab-case filename ending in .jpg (don't incl
 Choose the block that best fits the section. Catalog:
 
 intro-text          → Short headline + paragraph transition
-content-split       → Narrative paragraph with a supporting image
+content-split       → Short narrative with a supporting image (max ${MAX_CONTENT_SPLITS} per page)
 content-prose       → Long-form copy, no supporting image
 checklist-section   → List of benefits, inclusions, or qualifying criteria
 process-steps       → Numbered or sequential how-it-works steps
@@ -448,7 +468,7 @@ For feature-grid and industry-cards, the icon-bullet alternative (\`- IconName: 
 The \`**bold paragraph**\` form is for inline emphasis only, never as a structural item heading.
 
 VARIANT RULES — every variant value must come from the block's catalog above. NEVER emit \`variant: default\` (it is not a real variant for any block); pick a specific value from the catalog or omit the \`variant:\` key entirely.
-- content-split: alternate image-right and image-left across consecutive sections
+- content-split: at most ${MAX_CONTENT_SPLITS} per page and never directly after another image-beside-text section; if there are two, put them on opposite sides
 - feature-grid: 3-col by default; 4-col only if 8+ items
 - service-cards: 3-col by default; 2-col if descriptions exceed 4 sentences
 - team-grid: 2-col ≤4 people, 3-col 5–9, 4-col 10+
@@ -456,7 +476,7 @@ VARIANT RULES — every variant value must come from the block's catalog above. 
 - form: contact variant unless quote or newsletter clearly fits
 - pricing: match tier count to packages described (2-tier / 3-tier / 4-tier)
 - intro-text: centered by default; left-aligned only when feeding into left-aligned content
-- checklist-section: with-image by default (image on the right, carries the mandatory image: + query:); use with-image-left to place the photo on the left, or with-image-right to be explicit; standalone (no image) only for a short inline qualifying list with no room for a supporting photo
+- checklist-section: standalone by default (a clean bulleted list, no image). Use with-image / with-image-left only when the page has fewer than ${MAX_CONTENT_SPLITS} content-splits and the list is not next to one
 - process-steps: vertical by default; horizontal only for short 3–5-step flows
 - testimonials: grid by default; carousel only when 4+ testimonials
 - stats-bar: 3-up by default; 4-up if you have exactly 4 numbers
@@ -470,6 +490,8 @@ Choose ONE hero block for the page opener:
 - "page-header" with NO variant — slim inner-page title bar (most inner pages)
 
 Default to "page-header" if uncertain. Use "hero" only on the homepage and high-value landing pages.
+
+${PAGE_STRUCTURE_RULES}
 
 ${PAGE_BODY_EXEMPLAR}
 
@@ -490,6 +512,8 @@ ${WRITING_EXAMPLES}${noGoBlock ? `\n\n${noGoBlock}` : ''}`
   // home/about/contact/generic pages. Kept in the per-page suffix, not the prefix.
   const intent = resolvePageIntent(pageUrl, pageTitle, schema)
   const focusNote = intent.focusBlock ? `\n\n${intent.focusBlock}` : ''
+  const skeleton = skeletonPromptFor(intent.type, schema)
+  const skeletonNote = skeleton ? `\n\n${skeleton}` : ''
 
   // Editorial-review guidance from the draft critic on a targeted regeneration —
   // the specific defects (likely-fabricated specifics, quality notes) the rewrite
@@ -502,13 +526,13 @@ ${WRITING_EXAMPLES}${noGoBlock ? `\n\n${noGoBlock}` : ''}`
   const dynamicSuffix = `PAGE TO WRITE:
 Title: ${pageTitle}
 URL: ${pageUrl}
-Approved outline: ${JSON.stringify(outlineSections)}${focusNote}${angleNote}${revisionNote}
+Approved outline: ${JSON.stringify(outlineSections)}${focusNote}${skeletonNote}${angleNote}${revisionNote}
 
 KEYWORD TARGET:
 Primary: ${targetKeyword}
 Secondary: ${secondaryKeywords.join(', ')}
 
-PAGE CTA — close every page with a clear call-to-action that points to this. Weave it into the closing paragraph or render it as a final standalone block:
+PAGE CTA — close the page with a final cta-banner section that links to the URL below. Its button label must name the specific outcome for this page's reader (e.g. "Book a job-costing review"); never a generic label like "Learn More" or "Contact Us". The suggested text is a starting point only:
 Text: "${cta.text}"
 URL: ${cta.url}
 
@@ -739,18 +763,34 @@ export async function generateAndFinalizePage(input: FinalizePageInput): Promise
   const noGoPhrases = (await loadNoGoPhrases()).map(p => p.phrase)
   const validation = validateContent(result.content, [...noGoPhrases, ...clientAvoidPhrases(input.schema)])
   const subheadFlag = validateHeroSubhead(result.metadata.hero_subhead)
+  // Structure violations ride the same single retry. Only the hard ones trigger
+  // it on their own; a soft one (e.g. one scannable section short) is fixed if a
+  // retry happens anyway and is otherwise left to QA.
+  const structure = structureViolations(
+    measurePageStructure(result.content, { faqCount: result.metadata.faq_block.length }),
+    intent.type,
+  )
+  const structureFlags = structure.map((v) => `Page structure: ${v.message}`)
+  const hardStructure = structure.some((v) => RETRY_STRUCTURE_CODES.has(v.code))
   const writingFlags = [
     ...(subheadFlag ? [subheadFlag] : []),
     ...validateFaqAnswers(result.metadata.faq_block),
   ]
-  const allFlags = [...validation.flagged, ...writingFlags]
+  const triggerFlags = [...validation.flagged, ...writingFlags]
+  const allFlags = triggerFlags.length || hardStructure ? [...triggerFlags, ...structureFlags] : []
   if (allFlags.length && !canRetry()) {
     console.warn(`[content-gen] Draft flagged ${input.pageUrl} but page deadline too close — keeping draft`)
   } else if (allFlags.length) {
     console.warn(
       `[content-gen] Draft flagged ${input.pageUrl}: ${allFlags.join(' | ')} — retrying`
     )
-    result = stripNotes(await gen(allFlags))
+    // The first draft is a complete page; a retry that times out or comes back
+    // unparseable must not cost it.
+    const retried = await gen(allFlags).then(stripNotes, (err: unknown) => {
+      console.warn(`[content-gen] Quality retry failed on ${input.pageUrl} — keeping the first draft:`, err)
+      return null
+    })
+    if (retried && !retried.degraded && retried.content.trim()) result = retried
   }
 
   const annotations = parseBlockAnnotations(result.content)
@@ -1028,7 +1068,7 @@ async function reviewAndMaybeRegen(
 
   const { data: fresh } = await supabase
     .from('generated_pages')
-    .select('content_markdown, target_keyword')
+    .select('content_markdown, target_keyword, faq_block')
     .eq('id', input.pageId)
     .single()
 
@@ -1038,6 +1078,7 @@ async function reviewAndMaybeRegen(
         {
           ...input,
           contentMarkdown: fresh.content_markdown,
+          faq: fresh.faq_block,
           targetKeyword: fresh.target_keyword ?? input.targetKeyword,
         },
         undefined,
@@ -1537,6 +1578,7 @@ export async function generateSinglePage(
               pageUrl: outline.page_url,
               pageTitle: outline.page_title,
               contentMarkdown: result.content,
+              faq: result.metadata.faq_block,
               outlineSections: outline.sections,
               targetKeyword: result.metadata.target_keyword,
               competitorRefs,

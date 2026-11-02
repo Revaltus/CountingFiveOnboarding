@@ -3,6 +3,7 @@ import { runRules, type RulesInput } from './index'
 
 const base: RulesInput = {
   body: '<!-- block: content-split | variant: image-right -->\n## A\n\nText.\n',
+  pageUrl: '/about',
   metaTitle: 'Tax Planning for Dental Practices in Austin | Firm Name',  // 55 chars
   metaDescription: 'x'.repeat(155),
   heroBlock: 'hero', heroVariant: 'image', heroSubhead: null, faqBlock: null,
@@ -47,5 +48,17 @@ describe('runRules', () => {
     expect(structural?.message).toContain('Three or more consecutive sentences')
     expect(structural?.severity).toBe('med')
     expect(structural?.safety).toBe('flag')
+  })
+  it('flags page-structure problems on a niche page, flag-only and never failing QA severity', () => {
+    const body = [1, 2, 3].map(i => `<!-- block: content-split | variant: image-${i % 2 ? 'right' : 'left'} -->\n## S${i}\n\nText.\n`).join('\n')
+    const found = runRules({ ...base, body, pageUrl: '/industries/dental' }).filter(f => f.agent === 'rules' && f.kind !== 'media_side')
+    const kinds = found.map(f => f.kind)
+    expect(kinds).toEqual(expect.arrayContaining(['too_many_splits', 'consecutive_image_blocks', 'too_few_faqs', 'missing_cta']))
+    expect(found.every(f => f.safety === 'flag' && f.severity !== 'high')).toBe(true)
+  })
+  it('counts the stored faq_block toward the FAQ check', () => {
+    const faqBlock = Array.from({ length: 7 }, (_, i) => ({ question: `q${i}`, answer: 'a' }))
+    const kinds = runRules({ ...base, pageUrl: '/industries/dental', faqBlock }).map(f => f.kind)
+    expect(kinds).not.toContain('too_few_faqs')
   })
 })

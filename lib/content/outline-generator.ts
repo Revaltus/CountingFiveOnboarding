@@ -29,6 +29,7 @@ import type { AuditResult } from '@/types/audit-result'
 import { asJson } from '@/lib/supabase/json-typed'
 import { OUTLINE_STALE_CLAIM_MS } from './outline-resume'
 import { readSnapshot } from '@/lib/onboarding/page-snapshot'
+import { BODY_MAX_WORDS, BODY_TARGET_WORDS, skeletonPromptFor } from './page-structure'
 
 const OUTLINE_MODEL = PUBLISHED_CONTENT_MODEL
 
@@ -193,10 +194,11 @@ OUTPUT FORMAT (JSON only, no prose):
 }
 
 RULES:
-- 4–7 sections per page (fewer for simple pages, more for comprehensive service pages)
+- 3–6 body sections per page. When the page has a PAGE SKELETON below, follow its order and roles exactly (one section per slot; the hero and FAQ are added outside the outline)
 - H1 must contain or closely relate to the target keyword
 - Section descriptions are a WORKING BRIEF, not a topic label. Each must name the concrete material the copywriter should use — a specific niche audience and their pain, a real credential or proof point from the firm context, or the keyword the section targets. Generic placeholders ("Add content here", "Overview of services", "Introduction to the topic") are unacceptable — every description must be specific enough that two different writers would produce the same-shaped section.
-- Word counts should total 600–1200 words for standard pages, 1500–2000 for pillar pages
+- Body word counts should total ${BODY_TARGET_WORDS.min}–${BODY_TARGET_WORDS.max} words (never over ${BODY_MAX_WORDS}). Depth, definitions and edge cases belong in the page FAQ, not in more sections
+- Each section has one job; never plan two sections that cover the same point
 - Do not write any actual copy — structure only
 
 ${OUTLINE_EXEMPLAR}
@@ -213,10 +215,11 @@ HEADING RULES (h1 and every h2):
   // or service this page is about (the cached firm context lists them all).
   const intent = resolvePageIntent(pageUrl, pageTitle, schema)
   const focusBlock = intent.focusBlock ? `\n${intent.focusBlock}\n` : ''
+  const skeleton = skeletonPromptFor(intent.type, schema)
   const dynamicSuffix = `PAGE: ${pageTitle} (${pageUrl})
 TARGET KEYWORD: ${targetKeyword}
 SECONDARY KEYWORDS: ${secondaryKeywords.join(', ')}
-${focusBlock}
+${focusBlock}${skeleton ? `\n${skeleton}\n` : ''}
 
 ${existingContent ? `EXISTING CONTENT (current site — improve on this):\n${existingContent.slice(0, 800)}` : ''}
 

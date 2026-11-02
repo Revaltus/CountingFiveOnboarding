@@ -114,6 +114,7 @@ export async function runQaForPage(
 
     const rules = runRules({
       body,
+      pageUrl: row.page_url,
       metaTitle: row.meta_title,
       metaDescription: row.meta_description,
       heroBlock: row.hero_block,
@@ -155,6 +156,7 @@ export async function runQaForPage(
             pageUrl: row.page_url,
             pageTitle: row.page_title,
             contentMarkdown: merged.fields.body,
+            faq: row.faq_block,
             outlineSections,
             targetKeyword: row.target_keyword ?? '',
             // The judge here grades accuracy/coverage against the outline and firm

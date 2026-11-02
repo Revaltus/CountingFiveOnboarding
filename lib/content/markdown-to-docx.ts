@@ -1,4 +1,6 @@
 import { Paragraph, HeadingLevel, TextRun } from 'docx'
+import { parseBlockComment } from '@/lib/editor/block-annotation'
+import { CAROUSEL_CUE, isCarouselBlock } from './page-structure'
 
 // Strip the inline markdown marks our runs render as plain text: **bold**,
 // *italic*, and [label](url) (kept as the label). Shared so the page-body
@@ -42,6 +44,19 @@ export function markdownToDocxParagraphs(markdown: string): Paragraph[] {
     }
 
     if (!trimmed) continue
+
+    // Block annotations are layout data, not copy. The one a rebuilder needs is
+    // which sections are carousels.
+    if (trimmed.startsWith('<!--') && trimmed.endsWith('-->')) {
+      const c = parseBlockComment(trimmed)
+      if (c && isCarouselBlock(c.blockId, c.variant)) {
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: CAROUSEL_CUE, italics: true })],
+          spacing: { before: 240, after: 0 },
+        }))
+      }
+      continue
+    }
 
     if (trimmed.startsWith('## ')) {
       paragraphs.push(new Paragraph({

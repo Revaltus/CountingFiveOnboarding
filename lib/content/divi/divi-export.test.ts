@@ -455,3 +455,31 @@ describe('parseDiviSections — ink bands', () => {
     expect(s[2]).toMatchObject({ image: 'a.jpg', alt: 'A', query: 'q' })
   })
 })
+
+describe('carousel cue', () => {
+  const base: DiviPageInput = {
+    page_url: '/about',
+    page_title: 'About',
+    content_markdown:
+      '<!-- block: testimonials | variant: carousel -->\n## What clients say\n\n> Great work.\n\n' +
+      '<!-- block: testimonials | variant: grid -->\n## More praise\n\n> Also great.\n',
+    hero_block: 'page-header',
+    hero_variant: null,
+    hero_image_alt: null,
+    hero_subhead: null,
+    hero_image_query: null,
+    faq_block: null,
+    cta: null,
+  }
+
+  it('labels a carousel section once and leaves grids alone', () => {
+    const divi = buildPageDivi(base, new Map(), 'https://firm.com')
+    expect(divi.match(/\(This is a carousel section\)/g)).toHaveLength(1)
+    expect(divi.indexOf('(This is a carousel section)')).toBeLessThan(divi.indexOf('What clients say'))
+  })
+
+  it('labels a slider hero', () => {
+    const divi = buildPageDivi({ ...base, content_markdown: '', hero_block: 'hero', hero_variant: 'slider' }, new Map(), 'https://firm.com')
+    expect(divi).toContain('(This is a carousel section)')
+  })
+})

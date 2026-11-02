@@ -26,11 +26,11 @@ describe('validateHeroSubhead', () => {
 })
 
 describe('validateFaqAnswers', () => {
-  it('flags answers outside the 40-60 word band', () => {
+  it('flags answers outside the 40-80 word band', () => {
     const flags = validateFaqAnswers([
       { question: 'Too short?', answer: 'It depends on your situation.' },
       { question: 'Just right?', answer: Array(50).fill('word').join(' ') },
-      { question: 'Too long?', answer: Array(80).fill('word').join(' ') },
+      { question: 'Too long?', answer: Array(95).fill('word').join(' ') },
     ])
     expect(flags).toHaveLength(2)
     expect(flags[0]).toContain('too short')

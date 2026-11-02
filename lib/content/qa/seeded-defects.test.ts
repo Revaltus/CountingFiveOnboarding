@@ -10,7 +10,7 @@ const expected = JSON.parse(readFileSync(path.join(dir, 'seeded-defects.expect.j
 describe('seeded-defect fixture', () => {
   it('rules catch every planted deterministic defect', () => {
     const kinds = new Set(runRules({
-      body, metaTitle: 'Tax Planning for Manufacturers in Michigan | Korbey Lague', metaDescription: 'x'.repeat(155),
+      body, pageUrl: '/industries/manufacturing', metaTitle: 'Tax Planning for Manufacturers in Michigan | Korbey Lague', metaDescription: 'x'.repeat(155),
       heroBlock: 'hero', heroVariant: 'image', heroSubhead: null, faqBlock: null,
       noGoPhrases: ['trusted partner'], avoidPhrases: [],
     }).map(f => f.kind))

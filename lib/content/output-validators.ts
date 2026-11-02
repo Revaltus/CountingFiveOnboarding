@@ -2,6 +2,7 @@ import type { SessionSchema } from '@/types/session-schema'
 import type { PageIntentType } from './page-intent'
 import { activeTeam } from './active-team'
 import { objArr } from './schema-coerce'
+import { FAQ_ANSWER_WORDS } from './page-structure'
 
 type Niche = NonNullable<SessionSchema['niches']>[number]
 type Service = NonNullable<SessionSchema['services']>[number]
@@ -33,8 +34,9 @@ export function validateHeroSubhead(subhead: string | null | undefined): string 
   return null
 }
 
-// Each FAQ answer should be a substantive 40-60 words — long enough to actually
-// answer, short enough to stay scannable. Returns one flag per out-of-range answer.
+// Each FAQ answer should be a substantive FAQ_ANSWER_WORDS long — the FAQ carries
+// the page's depth now (page-structure.ts) but each answer must stay scannable.
+// Returns one flag per out-of-range answer.
 export function validateFaqAnswers(
   faq: Array<{ question: string; answer: string }> | null | undefined,
 ): string[] {
@@ -45,8 +47,9 @@ export function validateFaqAnswers(
     if (!answer) continue
     const n = wordCount(answer)
     const q = (item.question ?? '').slice(0, 60)
-    if (n < 40) flags.push(`FAQ answer too short (${n} words) for "${q}" — expand to 40-60 words with a concrete specific.`)
-    else if (n > 60) flags.push(`FAQ answer too long (${n} words) for "${q}" — tighten to 40-60 words.`)
+    const { min, max } = FAQ_ANSWER_WORDS
+    if (n < min) flags.push(`FAQ answer too short (${n} words) for "${q}" — expand to ${min}-${max} words with a concrete specific.`)
+    else if (n > max) flags.push(`FAQ answer too long (${n} words) for "${q}" — tighten to ${min}-${max} words.`)
   }
   return flags
 }
