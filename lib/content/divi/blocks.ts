@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { markdownToHtml, inlineMarkdown } from './markdown'
-import { safeUrl } from './sanitize'
+import { escapeShortcodeBrackets, safeUrl } from './sanitize'
 import { templateSectionPattern } from '@/lib/editor/block-annotation'
 import type { PricingPlansConfig } from '@/types/pricing-plans'
 import { c5, pad, radius, HEADING_FONT } from './style'
@@ -29,7 +29,7 @@ const BV = '4.27.4' // Divi _builder_version stamped on emitted modules
 
 // Divi encodes a literal double-quote inside a shortcode attribute as %22.
 function attr(value: string): string {
-  return (value ?? '').replace(/"/g, '%22').replace(/\r?\n/g, ' ').trim()
+  return escapeShortcodeBrackets((value ?? '').replace(/"/g, '%22').replace(/\r?\n/g, ' ').trim())
 }
 
 // ---------------------------------------------------------------------------

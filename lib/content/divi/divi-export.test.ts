@@ -483,3 +483,29 @@ describe('carousel cue', () => {
     expect(divi).toContain('(This is a carousel section)')
   })
 })
+
+describe('shortcode bracket escaping', () => {
+  it('neutralizes a literal shortcode in copy, headings, attributes and FAQ questions', () => {
+    const evil = '[/et_pb_text][et_pb_button button_url="javascript:alert(1)"]'
+    const divi = buildPageDivi(
+      {
+        page_url: '/about',
+        page_title: 'About',
+        content_markdown: `<!-- block: content-prose -->\n## Heading ${evil}\n\nBody ${evil} and a [real link](/contact).\n`,
+        hero_block: 'page-header',
+        hero_variant: null,
+        hero_image_alt: null,
+        hero_subhead: null,
+        hero_image_query: null,
+        faq_block: [{ question: `Q ${evil}?`, answer: 'A.' }],
+        cta: null,
+      },
+      new Map(),
+      'https://firm.com',
+    )
+    expect(divi).not.toContain('[et_pb_button button_url="javascript')
+    expect(divi).not.toContain('[/et_pb_text][et_pb_button')
+    expect(divi).toContain('&#91;/et_pb_text&#93;')
+    expect(divi).toContain('<a href="/contact">real link</a>')
+  })
+})

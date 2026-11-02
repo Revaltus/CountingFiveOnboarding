@@ -26,10 +26,21 @@ export function safeUrl(raw: string): string | null {
 // Escape a value for use inside a double-quoted HTML attribute or as element
 // text: encodes &, <, >, and both quote styles so nothing can break out.
 export function htmlAttrEscape(value: string): string {
-  return (value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+  return escapeShortcodeBrackets(
+    (value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;'),
+  )
+}
+
+// WordPress parses shortcodes with a regex over the whole post_content, so a
+// literal "[et_pb_…]" inside copy (crawled from an old site, pasted, or
+// AI-written) would close the enclosing module and splice in its own. Every
+// text that reaches the export goes through this; WP renders the entities as
+// plain brackets.
+export function escapeShortcodeBrackets(value: string): string {
+  return value.replace(/\[/g, '&#91;').replace(/\]/g, '&#93;')
 }

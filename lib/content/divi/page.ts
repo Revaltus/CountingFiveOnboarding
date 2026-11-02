@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { siteHost, internalizeHref } from '@/lib/content/deliverable-builder'
-import { markdownToHtml } from './markdown'
+import { inlineMarkdown, markdownToHtml } from './markdown'
 import {
   parseDiviSections,
   parseCards,
@@ -68,7 +68,7 @@ const CAROUSEL_CUE_HTML = `<p><em>${CAROUSEL_CUE}</em></p>`
 
 function headingHtml(section: DiviSection): string {
   const cue = isCarouselBlock(section.blockId, section.variant) ? `${CAROUSEL_CUE_HTML}\n` : ''
-  return `${cue}<h2>${section.heading}</h2>\n${markdownToHtml(section.content)}`
+  return `${cue}<h2>${inlineMarkdown(section.heading)}</h2>\n${markdownToHtml(section.content)}`
 }
 
 // Pull the first markdown link out of a section body for a CTA fallback.

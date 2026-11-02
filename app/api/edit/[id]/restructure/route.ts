@@ -4,6 +4,7 @@ import { DEFAULT_COMMIT_AUTHOR } from '@/lib/github/commit-identity'
 import { resolveEditContext } from '../_helpers'
 import { safePath } from '../_path'
 import { readJsonBody } from '@/app/api/_json'
+import { isSiteOwner } from '@/lib/auth/access'
 import { createServerClient } from '@/lib/supabase/server'
 import { checkChatSpendLimit } from '@/lib/ai/chat-spend-limit'
 import { loadNoGoPhrases } from '@/lib/content/no-go-phrases'
@@ -52,6 +53,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const ctx = await resolveEditContext(id)
   if (ctx instanceof NextResponse) return ctx
+  // A whole-page AI rewrite: same boundary as the per-page AI editor (chat
+  // route) — staff admins and Site Owners only, not managers/editors.
+  if (!(ctx.user.isAdmin || isSiteOwner(ctx.user))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await readJsonBody<RestructureBody>(req)
   if (body instanceof NextResponse) return body

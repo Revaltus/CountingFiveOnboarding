@@ -9,7 +9,7 @@
 // verbatim inside a text module.
 // ---------------------------------------------------------------------------
 
-import { safeUrl } from './sanitize'
+import { escapeShortcodeBrackets, safeUrl } from './sanitize'
 
 function escapeHtml(text: string): string {
   return text
@@ -36,7 +36,8 @@ export function inlineMarkdown(text: string): string {
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
   out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
-  return out
+  // After link parsing (which needs the brackets): any bracket left is copy.
+  return escapeShortcodeBrackets(out)
 }
 
 // Strip machine-only annotation lines (icon:/photo:/query:/alt:) that live in

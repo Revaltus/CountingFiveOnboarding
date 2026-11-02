@@ -87,6 +87,22 @@ describe('POST /api/edit/[id]/restructure', () => {
     expect(h.proposeRestructure).not.toHaveBeenCalled()
   })
 
+  it('forbids managers and editors (admins and Site Owners only, like the AI editor)', async () => {
+    h.ctx = { githubRepo: 'repo', sessionId: 'sess', user: { id: 'u2', isAdmin: false, capabilities: ['manager'] } }
+    expect((await call({ path: PAGE })).status).toBe(403)
+    h.ctx = { githubRepo: 'repo', sessionId: 'sess', user: { id: 'u3', isAdmin: false, capabilities: ['editor'] } }
+    expect((await call({ action: 'accept', path: PAGE, proposed: lean, expectedSha: 'sha-1' })).status).toBe(403)
+    expect(h.proposeRestructure).not.toHaveBeenCalled()
+    expect(h.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('lets a Site Owner propose', async () => {
+    h.ctx = { githubRepo: 'repo', sessionId: 'sess', user: { id: 'u4', isAdmin: false, capabilities: ['owner'] } }
+    h.proposeRestructure.mockResolvedValue({ ok: false, reason: 'model_failed', details: [] })
+    expect((await call({ path: PAGE })).status).toBe(502)
+    expect(h.proposeRestructure).toHaveBeenCalled()
+  })
+
   it('rejects traversal and non-page paths', async () => {
     expect((await call({ path: 'content/pages/..%2F..%2Fetc%2Fpasswd.md' })).status).toBe(400)
     expect((await call({ path: 'content/posts/tax-tips.md' })).status).toBe(400)

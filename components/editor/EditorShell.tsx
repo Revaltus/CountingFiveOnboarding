@@ -1139,7 +1139,7 @@ export default function EditorShell({
               }}
             />
           )}
-          {isLivePage && selPageIsFile && (
+          {isLivePage && selPageIsFile && (isAdmin || viewerIsOwner) && (
             <RestructureButton
               sessionId={sessionId}
               path={selectedPath}
