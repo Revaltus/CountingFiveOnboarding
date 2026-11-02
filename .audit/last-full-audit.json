@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-01",
-  "commit": "7dbb824331492d44844377d9726f0f6f787c78ad",
-  "note": "Full re-audit 2026-10-01: 6 read-only reviewers (security/RLS, pipeline+cron, agent/MBP, editor/GitHub, Design Studio, Divi/fleet/DB/UI); 0 Critical, 2 High, 3 Medium, 1 Low fixed in 7dbb824",
+  "date": "2026-11-02",
+  "commit": "4cd07b02f3ea224bc8df4b7b99c0d2a7c272ef65",
+  "note": "Full re-audit 2026-11-02: 5 read-only reviewers (security/routes, pipeline+QA, editor/GitHub, Design Studio, exports/UI/scripts) over 224 files; 0 Critical/High, 3 Medium fixed (Divi shortcode escaping, Restructure gate, outline untrusted input)",
   "thresholds": {
     "days": 30,
     "commits": 150,
