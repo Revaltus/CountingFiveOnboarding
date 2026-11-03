@@ -4,7 +4,7 @@ import path from 'node:path'
 import type { SessionSchema } from '@/types/session-schema'
 import { splitFile } from '@/lib/editor/frontmatter'
 import { getFaqBlock } from '@/lib/editor/structured-fields'
-import { composeProposal, existingImages, placeFaq, proposalErrors, splitOutFaq } from './restructure-page'
+import { coerceVariants, composeProposal, existingImages, placeFaq, proposalErrors, splitOutFaq } from './restructure-page'
 import { measurePageStructure } from './page-structure'
 
 const file = readFileSync(path.join(__dirname, '__fixtures__', 'page-structure-zigzag.md'), 'utf8')
@@ -113,5 +113,19 @@ describe('proposalErrors', () => {
 describe('existingImages', () => {
   it('lists every image annotation on the page', () => {
     expect(existingImages(splitFile(file).body).has('optometry-intro-consult.jpg')).toBe(true)
+  })
+})
+
+describe('coerceVariants', () => {
+  it('turns an invented variant into a valid one so the proposal passes the checks', () => {
+    const body = leanBody.replace('intro-text | variant: centered', 'intro-text | variant: standard')
+    expect(proposalErrors(file, composeProposal(file, PATH, { body, faq }, schema), { templateVersion: null, noGoPhrases: [] })).not.toEqual([])
+    const fixed = coerceVariants(body, null)
+    expect(fixed).toContain('<!-- block: intro-text | variant: centered -->')
+    expect(proposalErrors(file, composeProposal(file, PATH, { body: fixed, faq }, schema), { templateVersion: null, noGoPhrases: [] })).toEqual([])
+  })
+
+  it('leaves valid variants and image fields alone', () => {
+    expect(coerceVariants(leanBody, null)).toBe(leanBody)
   })
 })

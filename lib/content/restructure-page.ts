@@ -9,6 +9,7 @@ import { findBlockComments } from '@/lib/editor/block-annotation'
 import { validateFrontmatterYaml } from '@/lib/editor/frontmatter-yaml'
 import { buildBrandVoiceBlock, buildFirmContext } from './brand-voice'
 import { buildNoGoPromptBlock, findNoGoHits } from './no-go-match'
+import { applyCoercions, blockCatalogHint, parseBlockAnnotations, validateBlockAnnotations } from './block-annotation-validator'
 import { ANTI_SLOP_RULES } from './anti-slop-validator'
 import { buildCachedMessages, extractCacheUsage } from './cache-control'
 import { generateJson } from './json-generation'
@@ -140,6 +141,16 @@ export function proposalErrors(
   return errors
 }
 
+/**
+ * Rewrite any variant the model invented (e.g. intro-text "standard") to the
+ * block's default, the same coercion the page writer applies, so one bad
+ * variant never sinks a whole proposal. Pure.
+ */
+export function coerceVariants(body: string, templateVersion: string | null): string {
+  const { coercions } = validateBlockAnnotations(parseBlockAnnotations(body), '', [], { templateVersion })
+  return coercions.length ? applyCoercions(body, coercions) : body
+}
+
 function parseAnswer(raw: unknown): ModelAnswer | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as { body?: unknown; faq?: unknown }
@@ -153,7 +164,7 @@ function parseAnswer(raw: unknown): ModelAnswer | null {
   return { body: r.body, faq: faq.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })) }
 }
 
-function staticPrefix(schema: SessionSchema, noGoPhrases: string[]): string {
+function staticPrefix(schema: SessionSchema, noGoPhrases: string[], templateVersion: string | null): string {
   const noGo = buildNoGoPromptBlock(noGoPhrases)
   return `You restructure an existing page on a CPA firm's website into a leaner, reader-first layout. You are editing, not writing from scratch.
 
@@ -167,6 +178,7 @@ HARD RULES:
 - Use ONLY facts already on the page or in the firm context above. Never add a credential, number, client, service, location or claim that isn't there.
 - Nothing substantive is lost: detail you cut from the body moves into an FAQ answer. Keep every internal link that still fits.
 - Keep the block annotation format exactly: an HTML comment "<!-- block: id | variant: v | image: x.jpg | alt: "..." | query: "..." -->" on the line before every "## heading". Field order: block, variant, image, alt, query, theme.
+- Use only these block ids and variants (what this site's template renders): ${blockCatalogHint({ templateVersion })}. Omit "variant:" rather than invent one.
 - Images: you may keep, move or drop an existing image annotation (copy its image, alt and query exactly). Never invent a new image filename. A content-split must carry an image; if none is left for it, use a different block.
 - Item format: in checklist-section use "- " bullets; in process-steps, feature-grid and service-cards introduce each item with a "### Title" line (feature-grid/service-cards items also need an "icon:" line, keep existing ones).
 - Do NOT include the FAQ in "body", and never write a heading starting "Frequently Asked Questions" or "FAQ" in it. The FAQ goes in "faq" and is placed automatically before the final CTA.
@@ -229,7 +241,7 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
   const { body, faq } = splitOutFaq(args.file)
   const before = measurePageStructure(args.file, { faqCount: faq.length })
   const violationsBefore = structureViolations(before, type)
-  const prefix = staticPrefix(args.schema, args.noGoPhrases)
+  const prefix = staticPrefix(args.schema, args.noGoPhrases, args.templateVersion)
 
   let fixNotes: string[] = []
   let lastErrors: string[] = []
@@ -263,7 +275,12 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
       fixNotes = ['Return valid JSON with a non-empty "body" string and a "faq" array.']
       continue
     }
-    const proposed = composeProposal(args.file, args.path, answer, args.schema)
+    const proposed = composeProposal(
+      args.file,
+      args.path,
+      { ...answer, body: coerceVariants(answer.body, args.templateVersion) },
+      args.schema,
+    )
     const errors = proposalErrors(args.file, proposed, { templateVersion: args.templateVersion, noGoPhrases: args.noGoPhrases })
     if (!errors.length) {
       const after = measurePageStructure(proposed)

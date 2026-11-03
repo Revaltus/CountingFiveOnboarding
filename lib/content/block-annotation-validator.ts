@@ -414,6 +414,11 @@ export function validateBlockAnnotations(
   }
 }
 
+function isImageSideBlock(blockId: string, variant: string | undefined): boolean {
+  if (blockId === 'content-split') return true
+  return blockId === 'checklist-section' && !!variant && variant.startsWith('with-image')
+}
+
 // ---------------------------------------------------------------------------
 // applyCoercions — given the raw markdown body and coercions from validation,
 // rewrite the offending `<!-- block: <id> | variant: <bad> ... -->` annotations
@@ -425,11 +430,6 @@ export function validateBlockAnnotations(
 // markdown (e.g. someone hand-edited the annotation between parse and apply),
 // it's a no-op for that entry.
 // ---------------------------------------------------------------------------
-function isImageSideBlock(blockId: string, variant: string | undefined): boolean {
-  if (blockId === 'content-split') return true
-  return blockId === 'checklist-section' && !!variant && variant.startsWith('with-image')
-}
-
 export function applyCoercions(markdown: string, coercions: AnnotationCoercion[]): string {
   let result = markdown
   for (const c of coercions) {
