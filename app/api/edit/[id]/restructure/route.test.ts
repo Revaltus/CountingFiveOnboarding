@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   schema: {} as Record<string, unknown>,
   readFile: vi.fn(),
   writeFile: vi.fn(async (..._args: unknown[]) => ({ commitSha: 'c', blobSha: 'b' })),
-  listPathCommitMessages: vi.fn(async (..._args: unknown[]) => [] as string[]),
+  listPathCommits: vi.fn(async (..._args: unknown[]) => [] as Array<{ message: string; date: string | null; authorName: string | null }>),
   proposeRestructure: vi.fn(),
   overLimit: null as unknown,
   reviewContentEdit: vi.fn(),
@@ -40,12 +40,12 @@ vi.mock('@/lib/github/repo-files', () => ({
   FileNotFoundError: class extends Error {},
   StaleShaError: class extends Error {},
   ensureDraftBranch: vi.fn(),
-  listPathCommitMessages: h.listPathCommitMessages,
+  listPathCommits: h.listPathCommits,
   readFile: h.readFile,
   writeFile: h.writeFile,
 }))
 
-import { POST } from './route'
+import { GET, POST } from './route'
 import { composeProposal } from '@/lib/content/restructure-page'
 
 const PAGE = 'content/pages/industries--optometry.md'
@@ -60,7 +60,7 @@ const lean = composeProposal(
   fixture,
   PAGE,
   {
-    body: `<!-- block: intro-text | variant: centered -->\n## Hi\n\nShort.\n\n<!-- block: cta-banner | variant: color-bg -->\n## Talk\n\n[Book a practice review](/contact)`,
+    body: `<!-- block: intro-text | variant: centered -->\n## Hi\n\nShort, with [outsourced accounting](/services/outsourced-accounting), [foundations](/services/business-foundation-services), [metrics](/industries/optometry/practice-management-metrics) and [our approach](/why-rootadvisors).\n\n<!-- block: cta-banner | variant: color-bg -->\n## Talk\n\n[Book a practice review](/contact)`,
     faq: [{ question: 'Q?', answer: 'A.' }],
   },
   {} as never,
@@ -75,8 +75,8 @@ describe('POST /api/edit/[id]/restructure', () => {
     h.readFile.mockResolvedValue({ path: PAGE, content: fixture, sha: 'sha-1' })
     h.writeFile.mockClear()
     h.proposeRestructure.mockReset()
-    h.listPathCommitMessages.mockReset()
-    h.listPathCommitMessages.mockResolvedValue([])
+    h.listPathCommits.mockReset()
+    h.listPathCommits.mockResolvedValue([])
     h.reviewContentEdit.mockClear()
   })
 
@@ -129,10 +129,10 @@ describe('POST /api/edit/[id]/restructure', () => {
   })
 
   it('proposes without writing, with a diff and the hand-edit flag', async () => {
-    h.listPathCommitMessages.mockResolvedValue(['Edit industries--optometry.md via admin (a@x.com)'])
+    h.listPathCommits.mockResolvedValue([{ message: 'Edit industries--optometry.md via admin (a@x.com)', date: null, authorName: 'A' }])
     h.proposeRestructure.mockResolvedValue({
       ok: true,
-      proposal: { proposed: lean, before: {}, after: {}, violationsBefore: [], violationsAfter: [] },
+      proposal: { proposed: lean, before: {}, after: {}, violationsBefore: [], violationsAfter: [], coverage: { droppedLinks: [], terms: [] } },
     })
     const res = await call({ path: PAGE })
     expect(res.status).toBe(200)
@@ -173,5 +173,47 @@ describe('POST /api/edit/[id]/restructure', () => {
     expect((opts as { expectedSha: string }).expectedSha).toBe('sha-1')
     expect(h.reviewContentEdit).toHaveBeenCalledWith('sess', PAGE, lean)
     expect(h.proposeRestructure).not.toHaveBeenCalled()
+  })
+
+  describe('one restructure per page', () => {
+    const done = [{ message: 'Restructure industries--optometry.md via AI (h@x.com)', date: '2026-11-02T09:00:00Z', authorName: 'Hank' }]
+    const statusOf = async () =>
+      (await GET(new Request(`http://x/api/edit/s/restructure?path=${encodeURIComponent(PAGE)}`), { params: Promise.resolve({ id: 's' }) })).json()
+
+    it('GET reports the lock with date and author', async () => {
+      expect(await statusOf()).toEqual({ restructured: false, at: null, by: null })
+      h.listPathCommits.mockResolvedValue(done)
+      expect(await statusOf()).toEqual({ restructured: true, at: '2026-11-02T09:00:00Z', by: 'Hank' })
+    })
+
+    it('refuses to propose or accept again without an override', async () => {
+      h.listPathCommits.mockResolvedValue(done)
+      const propose = await call({ path: PAGE })
+      expect(propose.status).toBe(409)
+      expect(((await propose.json()) as { restructured: boolean }).restructured).toBe(true)
+      expect((await call({ action: 'accept', path: PAGE, proposed: lean, expectedSha: 'sha-1' })).status).toBe(409)
+      expect(h.proposeRestructure).not.toHaveBeenCalled()
+      expect(h.writeFile).not.toHaveBeenCalled()
+    })
+
+    it('lets an admin override', async () => {
+      h.listPathCommits.mockResolvedValue(done)
+      expect((await call({ action: 'accept', path: PAGE, proposed: lean, expectedSha: 'sha-1', override: true })).status).toBe(200)
+      expect(h.writeFile).toHaveBeenCalled()
+    })
+
+    it('never lets a Site Owner override', async () => {
+      h.listPathCommits.mockResolvedValue(done)
+      h.ctx = { githubRepo: 'repo', sessionId: 'sess', user: { id: 'u4', isAdmin: false, capabilities: ['owner'] } }
+      expect((await call({ path: PAGE, override: true })).status).toBe(403)
+      expect((await call({ path: PAGE })).status).toBe(409)
+      expect(h.proposeRestructure).not.toHaveBeenCalled()
+    })
+
+    it('stamps the accept commit with the marker the lock reads', async () => {
+      await call({ action: 'accept', path: PAGE, proposed: lean, expectedSha: 'sha-1' })
+      const message = h.writeFile.mock.calls[0]![4] as string
+      expect(message.startsWith('Restructure industries--optometry.md via AI')).toBe(true)
+    })
   })
 })

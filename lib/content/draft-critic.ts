@@ -9,7 +9,7 @@ import { parseCritic, criticFailsThreshold, type CriticReview, type ParsedCritic
 import type { SessionSchema } from '@/types/session-schema'
 import type { Json } from '@/types/database'
 import type { TokenStage } from './token-pricing'
-import { BODY_TARGET_WORDS, structureTypeForUrl, usesSkeleton } from './page-structure'
+import { bodyBudgetFor, structureTypeForUrl, usesSkeleton } from './page-structure'
 
 export interface DraftCriticInput {
   pageId: string
@@ -40,12 +40,14 @@ function faqPairs(raw: unknown): FaqPair[] {
 // Without this the critic reads a short body as thin and its auto-rewrite
 // would put the bulk straight back.
 function pageShapeBlock(pageUrl: string, faq: FaqPair[]): string {
-  const lean = usesSkeleton(structureTypeForUrl(pageUrl))
+  const type = structureTypeForUrl(pageUrl)
+  const lean = usesSkeleton(type)
+  const budget = bodyBudgetFor(type)
   const faqText = faq.length
     ? `THE PAGE'S FAQ (rendered on the page below the body; part of the page you are grading):\n${faq.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`
     : ''
   const shape = lean
-    ? `PAGE SHAPE: this page is deliberately lean. The body is ${BODY_TARGET_WORDS.min}-${BODY_TARGET_WORDS.max} words with bullets, and the FAQ holds the depth (definitions, edge cases, how-it-works detail). Judge evidence, information gain, promise fulfillment and outline coverage across the body AND the FAQ together. An outline point covered in the FAQ or as a bullet counts as covered. Never mark down a short body, bullets in place of paragraphs, or two outline sections merged into one.`
+    ? `PAGE SHAPE: this page is deliberately lean. The body is ${budget.min}-${budget.max} words with bullets, and the FAQ holds the depth (definitions, edge cases, how-it-works detail). Judge evidence, information gain, promise fulfillment and outline coverage across the body AND the FAQ together. An outline point covered in the FAQ or as a bullet counts as covered. Never mark down a short body, bullets in place of paragraphs, or two outline sections merged into one.`
     : ''
   return [shape, faqText].filter(Boolean).join('\n\n')
 }

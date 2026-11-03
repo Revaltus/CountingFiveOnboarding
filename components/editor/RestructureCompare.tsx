@@ -1,26 +1,29 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useDialog } from '@/components/ui/use-dialog'
 import { FOCUS, PRIMARY_BTN, SECONDARY_BTN } from '@/components/design-studio/styles'
 import { diffHunks } from '@/lib/design/design-md-ui'
 import {
-  BODY_MAX_WORDS,
-  BODY_TARGET_WORDS,
+  DEFAULT_BODY_BUDGET,
   FAQ_QUESTIONS,
+  INDUSTRY_BODY_BUDGET,
   MAX_CONTENT_SPLITS,
   MIN_SCANNABLE_SECTIONS,
   isGenericCtaLabel,
   splitSections,
+  type BodyBudget,
   type PageStructureMetrics,
   type StructureSection,
 } from '@/lib/content/page-structure'
-import type { RestructureProposeResponse } from '@/lib/content/restructure-page'
+import type { ContentCoverage, RestructureProposeResponse, RestructureStatus } from '@/lib/content/restructure-page'
 
 // "Restructure to new layout": asks the server for a proposal (nothing is
 // written), shows current vs proposed side by side with the page-structure
 // metrics, and commits the proposal to the draft branch only on Accept.
+// One restructure per page: once accepted the button locks; admins can
+// override with "Restructure again…".
 
 type State =
   | { kind: 'idle' }
@@ -38,36 +41,85 @@ async function errorText(res: Response, fallback: string): Promise<string> {
   }
 }
 
+const formatDay = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : 'an earlier date')
+
 export default function RestructureButton({
   sessionId,
   path,
   isDirty,
+  isAdmin,
   onAccepted,
 }: {
   sessionId: string
   path: string
   isDirty: boolean
+  isAdmin: boolean
   onAccepted: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<null | { override: boolean }>(null)
+  const [status, setStatus] = useState<RestructureStatus | null>(null)
+
+  // EditorShell keys this per page, so status starts fresh for each file. An
+  // unknown status leaves the button usable; the server still enforces the lock.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/edit/${sessionId}/restructure?path=${encodeURIComponent(path)}`)
+      .then((res) => (res.ok ? (res.json() as Promise<RestructureStatus>) : null))
+      .then((s) => {
+        if (!cancelled && s) setStatus(s)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, path])
+
+  const locked = status?.restructured === true
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Propose a leaner, reader-first version of this page and compare it with the current one before accepting"
-        className={SECONDARY_BTN}
-      >
-        Restructure
-      </button>
+      {locked ? (
+        <>
+          <button
+            type="button"
+            disabled
+            title={`Restructured on ${formatDay(status.at)}${status.by ? ` by ${status.by}` : ''}`}
+            className={SECONDARY_BTN}
+          >
+            Restructured ✓
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setOpen({ override: true })}
+              title="Admin override: run Restructure on this page again"
+              className={`font-heading text-[11px] font-semibold text-text-secondary underline-offset-2 hover:text-brand-navy hover:underline ${FOCUS}`}
+            >
+              Restructure again…
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen({ override: false })}
+          title="Propose a leaner, reader-first version of this page and compare it with the current one before accepting"
+          className={SECONDARY_BTN}
+        >
+          Restructure
+        </button>
+      )}
       {open && (
         <RestructureCompare
           sessionId={sessionId}
           path={path}
           isDirty={isDirty}
-          onClose={() => setOpen(false)}
+          override={open.override}
+          restructuredAt={status?.at ?? null}
+          onClose={() => setOpen(null)}
           onAccepted={() => {
-            setOpen(false)
+            setOpen(null)
+            setStatus({ restructured: true, at: new Date().toISOString(), by: null })
             onAccepted()
           }}
         />
@@ -80,12 +132,16 @@ function RestructureCompare({
   sessionId,
   path,
   isDirty,
+  override,
+  restructuredAt,
   onClose,
   onAccepted,
 }: {
   sessionId: string
   path: string
   isDirty: boolean
+  override: boolean
+  restructuredAt: string | null
   onClose: () => void
   onAccepted: () => void
 }) {
@@ -101,7 +157,7 @@ function RestructureCompare({
       const res = await fetch(`/api/edit/${sessionId}/restructure`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path, override }),
       })
       if (!res.ok) {
         setState({ kind: 'error', message: await errorText(res, "Couldn't build a proposal.") })
@@ -119,7 +175,7 @@ function RestructureCompare({
       const res = await fetch(`/api/edit/${sessionId}/restructure`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'accept', path, proposed: data.proposed, expectedSha: data.currentSha }),
+        body: JSON.stringify({ action: 'accept', path, proposed: data.proposed, expectedSha: data.currentSha, override }),
       })
       if (!res.ok) {
         setState({ kind: 'error', message: await errorText(res, "Couldn't save the new version."), data })
@@ -147,7 +203,7 @@ function RestructureCompare({
         <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-border-default bg-surface-card px-5 py-3">
           <div className="min-w-0">
             <h2 id="restructure-title" className="font-heading text-sm font-semibold text-brand-navy">
-              Restructure to new layout
+              {override ? 'Restructure again' : 'Restructure to new layout'}
             </h2>
             <p className="truncate font-body text-xs text-text-muted">{path}</p>
           </div>
@@ -164,7 +220,12 @@ function RestructureCompare({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {state.kind === 'idle' && (
-            <Intro isDirty={isDirty} onStart={() => void propose()} />
+            <Intro
+              isDirty={isDirty}
+              override={override}
+              restructuredAt={restructuredAt}
+              onStart={() => void propose()}
+            />
           )}
           {state.kind === 'working' && (
             <p role="status" className="py-16 text-center font-body text-sm text-text-secondary">
@@ -183,7 +244,8 @@ function RestructureCompare({
                   This page has hand edits. Check that the proposal keeps anything you changed on purpose.
                 </p>
               )}
-              <MetricsStrip before={data.metrics.before} after={data.metrics.after} />
+              <MetricsStrip before={data.metrics.before} after={data.metrics.after} budget={data.budget} />
+              <CoveragePanel coverage={data.coverage} />
               {showDiff ? (
                 <DiffPanel data={data} />
               ) : (
@@ -218,33 +280,51 @@ function RestructureCompare({
   )
 }
 
-function Intro({ isDirty, onStart }: { isDirty: boolean; onStart: () => void }) {
+function Intro({
+  isDirty,
+  override,
+  restructuredAt,
+  onStart,
+}: {
+  isDirty: boolean
+  override: boolean
+  restructuredAt: string | null
+  onStart: () => void
+}) {
   return (
     <div className="mx-auto max-w-xl space-y-3 py-8 font-body text-sm text-text-secondary">
+      {override && (
+        <p className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning-strong">
+          This page was already restructured on {formatDay(restructuredAt)}. Running it again replaces the approved
+          layout if you accept the new proposal.
+        </p>
+      )}
       <p>
-        The AI rewrites this page into the reader-first layout: a short opener, the problem and how you solve it,
-        what the client gets, proof, how you work, a page-specific call to action, and an FAQ that carries the detail.
+        The AI rewrites this page into the reader-first layout for its page type (service or industry), with a
+        page-specific call to action and an FAQ that carries the detail.
       </p>
       <ul className="list-disc space-y-1 pl-5 text-xs">
         <li>
-          Body copy of {BODY_TARGET_WORDS.min}–{BODY_TARGET_WORDS.max} words (never over {BODY_MAX_WORDS}), with bullets
-          wherever a list reads faster.
+          Body copy of {DEFAULT_BODY_BUDGET.min}–{DEFAULT_BODY_BUDGET.max} words on service pages and{' '}
+          {INDUSTRY_BODY_BUDGET.min}–{INDUSTRY_BODY_BUDGET.max} on industry pages, with bullets wherever a list
+          reads faster.
         </li>
         <li>At most {MAX_CONTENT_SPLITS} image-beside-text sections, never back to back.</li>
         <li>
-          {FAQ_QUESTIONS.min}–{FAQ_QUESTIONS.max} FAQ questions holding the depth that search engines and AI read.
+          {FAQ_QUESTIONS.min}–{FAQ_QUESTIONS.max} FAQ questions. Anything search engines and AI value that doesn&apos;t
+          belong in the body moves there, so nothing is lost.
         </li>
-        <li>Only facts already on the page or in the firm profile. Existing images are reused.</li>
+        <li>Only facts already on the page or in the firm profile. Existing images and links are kept.</li>
       </ul>
       <p className="text-xs">
         Nothing is saved until you accept. Accepted changes go to the draft, where Review changes can still undo them
-        before you publish.
+        before you publish. A page can be restructured once.
       </p>
       {isDirty ? (
         <p className="text-xs text-warning-strong">Save or discard your unsaved edits to this page first.</p>
       ) : (
         <button type="button" onClick={onStart} className={PRIMARY_BTN}>
-          Propose a new layout
+          {override ? 'Run it again' : 'Propose a new layout'}
         </button>
       )}
     </div>
@@ -254,11 +334,11 @@ function Intro({ isDirty, onStart }: { isDirty: boolean; onStart: () => void }) 
 type MetricRow = {
   label: string
   value: (m: PageStructureMetrics) => string
-  ok: (m: PageStructureMetrics) => boolean
+  ok: (m: PageStructureMetrics, budget: BodyBudget) => boolean
 }
 
 const METRICS: MetricRow[] = [
-  { label: 'Body words', value: (m) => String(m.bodyWords), ok: (m) => m.bodyWords <= BODY_MAX_WORDS },
+  { label: 'Body words', value: (m) => String(m.bodyWords), ok: (m, b) => m.bodyWords <= b.cap },
   {
     label: 'Image + text sections',
     value: (m) => String(m.splitCount),
@@ -277,21 +357,60 @@ const METRICS: MetricRow[] = [
   },
 ]
 
-function MetricsStrip({ before, after }: { before: PageStructureMetrics; after: PageStructureMetrics }) {
+function MetricsStrip({
+  before,
+  after,
+  budget,
+}: {
+  before: PageStructureMetrics
+  after: PageStructureMetrics
+  budget: BodyBudget
+}) {
   return (
     <dl className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {METRICS.map((row) => (
         <div key={row.label} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
           <dt className="font-heading text-[11px] text-text-muted">{row.label}</dt>
           <dd className="mt-0.5 flex flex-wrap items-baseline gap-1 font-body text-xs">
-            <span className={row.ok(before) ? 'text-text-secondary' : 'text-error'}>{row.value(before)}</span>
+            <span className={row.ok(before, budget) ? 'text-text-secondary' : 'text-error'}>{row.value(before)}</span>
             <span aria-hidden="true" className="text-text-muted">→</span>
             <span className="sr-only">to</span>
-            <span className={`font-semibold ${row.ok(after) ? 'text-success' : 'text-error'}`}>{row.value(after)}</span>
+            <span className={`font-semibold ${row.ok(after, budget) ? 'text-success' : 'text-error'}`}>
+              {row.value(after)}
+            </span>
           </dd>
         </div>
       ))}
     </dl>
+  )
+}
+
+// Where the current page's key terms went: nothing useful to search/LLMs should
+// vanish. Terms moved out of the body should be in the FAQ.
+function CoveragePanel({ coverage }: { coverage: ContentCoverage }) {
+  const moved = coverage.terms.filter((t) => t.where === 'faq')
+  const missing = coverage.terms.filter((t) => t.where === 'missing')
+  const kept = coverage.terms.length - moved.length - missing.length
+  if (!coverage.terms.length) return null
+  return (
+    <section
+      aria-label="Where the content went"
+      className="mb-4 rounded-lg border border-border-default bg-surface-card px-3 py-2 font-body text-xs"
+    >
+      <p className="text-text-secondary">
+        <span className="font-heading font-semibold text-text-primary">Where the content went: </span>
+        {kept} key term{kept === 1 ? '' : 's'} kept in the body, {moved.length} moved to the FAQ
+        {missing.length ? `, ${missing.length} missing` : ', none lost'}.
+      </p>
+      {moved.length > 0 && (
+        <p className="mt-1 text-text-muted">Moved to FAQ: {moved.map((t) => t.term).join(', ')}</p>
+      )}
+      {missing.length > 0 && (
+        <p className="mt-1 text-warning-strong">
+          Missing — check before accepting: {missing.map((t) => t.term).join(', ')}
+        </p>
+      )}
+    </section>
   )
 }
 

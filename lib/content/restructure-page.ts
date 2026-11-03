@@ -17,14 +17,19 @@ import { BACKGROUND_MEDIUM_PROVIDER_OPTIONS, OUTLINE_PROVIDER_OPTIONS, PUBLISHED
 import { recordTokenUsage } from './token-usage'
 import { enforceVerbatimBios } from './verbatim-bios'
 import type { DiffLine } from '@/lib/design/design-md-ui'
+import { CARD_ICON_NAMES } from './card-icons'
+import { resolvePageIntent } from './page-intent'
+import { realStrings } from './schema-coerce'
 import {
   FAQ_ANSWER_WORDS,
   FAQ_QUESTIONS,
   PAGE_STRUCTURE_RULES,
   measurePageStructure,
+  renderedBody,
   skeletonPromptFor,
   structureTypeForUrl,
   structureViolations,
+  type BodyBudget,
   type PageStructureMetrics,
   type StructureViolation,
 } from './page-structure'
@@ -41,6 +46,7 @@ export type RestructureProposal = {
   after: PageStructureMetrics
   violationsBefore: StructureViolation[]
   violationsAfter: StructureViolation[]
+  coverage: ContentCoverage
 }
 
 // Body of POST /api/edit/[id]/restructure (propose).
@@ -54,9 +60,36 @@ export interface RestructureProposeResponse {
   diff: DiffLine[]
   // The page has manual ("via admin") saves the rewrite could undo.
   handEdited: boolean
+  // Where the current page's links and key terms ended up.
+  coverage: ContentCoverage
+  budget: BodyBudget
 }
 
-type ModelAnswer = { body: string; faq: FaqItem[] }
+// The accept commit message starts with this; its presence in a page's git
+// history is what marks the page as already restructured (one-time rule).
+export const RESTRUCTURE_COMMIT_PREFIX = 'Restructure '
+
+export function isRestructureCommit(message: string): boolean {
+  return message.startsWith(RESTRUCTURE_COMMIT_PREFIX) && /\bvia AI\b/.test(message.split('\n')[0])
+}
+
+export type RestructureStatus = { restructured: boolean; at: string | null; by: string | null }
+
+/** Whether a page's history (newest first) holds an accepted restructure. Pure. */
+export function restructureStatus(
+  commits: Array<{ message: string; date: string | null; authorName: string | null }>,
+): RestructureStatus {
+  const hit = commits.find((c) => isRestructureCommit(c.message))
+  return hit ? { restructured: true, at: hit.date, by: hit.authorName } : { restructured: false, at: null, by: null }
+}
+
+export type TermPlacement = 'body' | 'faq' | 'missing'
+export type ContentCoverage = {
+  droppedLinks: string[]
+  terms: Array<{ term: string; where: TermPlacement }>
+}
+
+type ModelAnswer = { body: string; faq: FaqItem[]; faqHeading?: string }
 
 const FAQ_MARKER = '<!-- block: faq-accordion -->'
 
@@ -110,7 +143,8 @@ export function composeProposal(
   const { frontmatter } = splitFile(file)
   const { trailer } = splitForModel(file)
   const { heading } = splitOutFaq(file)
-  const faqHeading = heading ?? `Frequently Asked Questions About ${pageTitle(frontmatter) || 'This Page'}`
+  const faqHeading =
+    answer.faqHeading?.trim() || heading || `Frequently Asked Questions About ${pageTitle(frontmatter) || 'This Page'}`
   const cleanedBody = enforceVerbatimBios(setFaqAccordionBody(answer.body, [], ''), schema)
   const body = placeFaq(cleanedBody, faqHeading, answer.faq)
   const visible = serializeFile({
@@ -118,6 +152,51 @@ export function composeProposal(
     body: `\n${body}`,
   })
   return composeAiEditCommit(visible, trailer, path)
+}
+
+function internalLinks(md: string): Set<string> {
+  const out = new Set<string>()
+  for (const m of renderedBody(md).matchAll(/\]\((\/[^)\s#?]*)/g)) {
+    out.add(m[1].length > 1 ? m[1].replace(/\/+$/, '') : m[1])
+  }
+  return out
+}
+
+const norm = (t: string) => t.toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Terms worth keeping for search/LLMs: the niche's own keywords plus anything
+// the current page set in bold. Only terms the current page actually uses.
+function keyTerms(current: string, nicheKeywords: string[]): string[] {
+  const body = norm(renderedBody(current))
+  const bold = [...renderedBody(current).matchAll(/\*\*([^*\n]{3,60})\*\*/g)]
+    .map((m) => m[1].replace(/^Q:\s*/, '').replace(/[.:?!]+$/, '').trim())
+    .filter((t) => t.split(/\s+/).length <= 6)
+  const seen = new Set<string>()
+  return [...nicheKeywords, ...bold].filter((t) => {
+    const k = norm(t)
+    if (!k || seen.has(k) || !body.includes(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+/**
+ * Where the current page's internal links and key terms ended up in the
+ * proposal: kept in the body, moved to the FAQ, or missing. Nothing useful to
+ * search/LLMs should vanish (it belongs in the FAQ if the body drops it). Pure.
+ */
+export function contentCoverage(current: string, proposed: string, nicheKeywords: string[] = []): ContentCoverage {
+  const after = internalLinks(proposed)
+  const droppedLinks = [...internalLinks(current)].filter((l) => !after.has(l))
+  const { body, faq } = splitOutFaq(proposed)
+  const bodyText = norm(renderedBody(body))
+  const faqText = norm(faq.map((f) => `${f.question} ${f.answer}`).join(' '))
+  const terms = keyTerms(current, nicheKeywords).map((term) => {
+    const k = norm(term)
+    const where: TermPlacement = bodyText.includes(k) ? 'body' : faqText.includes(k) ? 'faq' : 'missing'
+    return { term, where }
+  })
+  return { droppedLinks, terms }
 }
 
 /** Problems that make a proposal unsafe to show. Pure. */
@@ -138,6 +217,9 @@ export function proposalErrors(
   for (const hit of findNoGoHits(splitFile(proposed).body, opts.noGoPhrases)) {
     errors.push(`Banned phrase "${hit}" appears; rewrite it out.`)
   }
+  for (const link of contentCoverage(current, proposed).droppedLinks) {
+    errors.push(`Internal link ${link} was dropped; keep it in the body or in an FAQ answer.`)
+  }
   return errors
 }
 
@@ -153,7 +235,7 @@ export function coerceVariants(body: string, templateVersion: string | null): st
 
 function parseAnswer(raw: unknown): ModelAnswer | null {
   if (!raw || typeof raw !== 'object') return null
-  const r = raw as { body?: unknown; faq?: unknown }
+  const r = raw as { body?: unknown; faq?: unknown; faq_heading?: unknown }
   if (typeof r.body !== 'string' || !r.body.trim()) return null
   const faq = Array.isArray(r.faq)
     ? r.faq.filter(
@@ -161,7 +243,8 @@ function parseAnswer(raw: unknown): ModelAnswer | null {
           !!f && typeof (f as FaqItem).question === 'string' && typeof (f as FaqItem).answer === 'string',
       )
     : []
-  return { body: r.body, faq: faq.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })) }
+  const faqHeading = typeof r.faq_heading === 'string' && r.faq_heading.trim() ? r.faq_heading.trim().slice(0, 120) : undefined
+  return { body: r.body, faq: faq.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })), faqHeading }
 }
 
 function staticPrefix(schema: SessionSchema, noGoPhrases: string[], templateVersion: string | null): string {
@@ -180,7 +263,7 @@ HARD RULES:
 - Keep the block annotation format exactly: an HTML comment "<!-- block: id | variant: v | image: x.jpg | alt: "..." | query: "..." -->" on the line before every "## heading". Field order: block, variant, image, alt, query, theme.
 - Use only these block ids and variants (what this site's template renders): ${blockCatalogHint({ templateVersion })}. Omit "variant:" rather than invent one.
 - Images: you may keep, move or drop an existing image annotation (copy its image, alt and query exactly). Never invent a new image filename. A content-split must carry an image; if none is left for it, use a different block.
-- Item format: in checklist-section use "- " bullets; in process-steps, feature-grid and service-cards introduce each item with a "### Title" line (feature-grid/service-cards items also need an "icon:" line, keep existing ones).
+- Item format: in checklist-section use "- " bullets; in process-steps, feature-grid and service-cards introduce each item with a "### Title" line (feature-grid/service-cards items also need an "icon:" line: keep existing ones; new ones from ${CARD_ICON_NAMES.join(', ')}, never repeated within a block).
 - Do NOT include the FAQ in "body", and never write a heading starting "Frequently Asked Questions" or "FAQ" in it. The FAQ goes in "faq" and is placed automatically before the final CTA.
 - Keep any team member bios exactly as written.
 - Do not include frontmatter or any "SEO & AIO Metadata" / "Structured Data" section.
@@ -188,7 +271,7 @@ HARD RULES:
 ${ANTI_SLOP_RULES}${noGo ? `\n\n${noGo}` : ''}
 
 OUTPUT: JSON only, no prose:
-{ "body": "the full restructured page body in markdown with block annotations", "faq": [{ "question": "...", "answer": "..." }] }
+{ "body": "the full restructured page body in markdown with block annotations", "faq": [{ "question": "...", "answer": "..." }], "faq_heading": "only when the page notes ask for one, else omit" }
 The faq has ${FAQ_QUESTIONS.min}-${FAQ_QUESTIONS.max} items of ${FAQ_ANSWER_WORDS.min}-${FAQ_ANSWER_WORDS.max} words each; keep the strongest existing questions and add ones that carry the moved detail.`
 }
 
@@ -201,9 +284,13 @@ function dynamicSuffix(args: {
   violations: StructureViolation[]
   fixNotes: string[]
 }): string {
-  const skeleton = skeletonPromptFor(structureTypeForUrl(args.url), args.schema)
+  const type = structureTypeForUrl(args.url)
+  const skeleton = skeletonPromptFor(type, args.schema)
+  const notes = type === 'niche'
+    ? `\nPAGE NOTES: return "faq_heading" as "Common questions from <this audience>" (e.g. "Common questions from contractors").\n`
+    : ''
   return `PAGE: ${args.title || args.url} (${args.url})
-${skeleton ? `\n${skeleton}\n` : ''}
+${skeleton ? `\n${skeleton}\n` : ''}${notes}
 WHAT IS WRONG WITH THE CURRENT LAYOUT:
 ${args.violations.length ? args.violations.map((v) => `- ${v.message}`).join('\n') : '- Nothing measurable; tighten it to the rules and skeleton above.'}
 
@@ -242,6 +329,7 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
   const before = measurePageStructure(args.file, { faqCount: faq.length })
   const violationsBefore = structureViolations(before, type)
   const prefix = staticPrefix(args.schema, args.noGoPhrases, args.templateVersion)
+  const nicheKeywords = type === 'niche' ? realStrings(resolvePageIntent(args.url, title, args.schema).niche?.keywords) : []
 
   let fixNotes: string[] = []
   let lastErrors: string[] = []
@@ -278,7 +366,13 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
     const proposed = composeProposal(
       args.file,
       args.path,
-      { ...answer, body: coerceVariants(answer.body, args.templateVersion) },
+      {
+        ...answer,
+        body: coerceVariants(answer.body, args.templateVersion),
+        // Prime-style "Common questions from …" heading is an industry-page thing;
+        // service pages keep their existing FAQ heading (locked shape).
+        faqHeading: type === 'niche' ? answer.faqHeading : undefined,
+      },
       args.schema,
     )
     const errors = proposalErrors(args.file, proposed, { templateVersion: args.templateVersion, noGoPhrases: args.noGoPhrases })
@@ -286,7 +380,14 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
       const after = measurePageStructure(proposed)
       return {
         ok: true,
-        proposal: { proposed, before, after, violationsBefore, violationsAfter: structureViolations(after, type) },
+        proposal: {
+          proposed,
+          before,
+          after,
+          violationsBefore,
+          violationsAfter: structureViolations(after, type),
+          coverage: contentCoverage(args.file, proposed, nicheKeywords),
+        },
       }
     }
     lastErrors = errors

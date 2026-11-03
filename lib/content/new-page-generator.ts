@@ -19,7 +19,7 @@ import {
 } from '@/lib/github/repo-files'
 import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
-import { BODY_MAX_WORDS, BODY_TARGET_WORDS, skeletonPromptFor, structureTypeForUrl } from './page-structure'
+import { bodyBudgetFor, skeletonPromptFor, structureTypeForUrl } from './page-structure'
 
 const DEFAULT_CTA: Cta = { text: 'Schedule a consultation', url: '/contact' }
 
@@ -46,7 +46,9 @@ async function deriveOutline(args: {
   sessionId: string
 }): Promise<{ sections: OutlineSection[]; targetKeyword: string }> {
   const firmName = args.schema.business?.name ?? 'the firm'
-  const skeleton = skeletonPromptFor(structureTypeForUrl(args.url), args.schema)
+  const pageType = structureTypeForUrl(args.url)
+  const skeleton = skeletonPromptFor(pageType, args.schema)
+  const budget = bodyBudgetFor(pageType)
   const fallback = {
     sections: [{ h2: 'Overview', description: args.brief || args.title, word_count: 500 }],
     targetKeyword: args.title.toLowerCase(),
@@ -67,7 +69,7 @@ Return JSON only:
   ]
 }
 
-Produce 3-6 sections that make a complete, lean page for a human reader. Section word counts should total ${BODY_TARGET_WORDS.min}-${BODY_TARGET_WORDS.max} (never over ${BODY_MAX_WORDS}); depth goes in the page FAQ, not extra sections. Each section has one job and never repeats another.${skeleton ? `\n\n${skeleton}` : ''}`,
+Produce 3-6 sections that make a complete, lean page for a human reader. Section word counts should total ${budget.min}-${budget.max} (never over ${budget.cap}); depth goes in the page FAQ, not extra sections. Each section has one job and never repeats another.${skeleton ? `\n\n${skeleton}` : ''}`,
     firstBudget: 4000,
     retryBudget: 8000,
     providerOptions: OUTLINE_PROVIDER_OPTIONS,

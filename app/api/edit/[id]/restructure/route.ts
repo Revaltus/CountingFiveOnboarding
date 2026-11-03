@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { DEFAULT_COMMIT_AUTHOR } from '@/lib/github/commit-identity'
-import { resolveEditContext } from '../_helpers'
+import { resolveEditContext, type EditContext } from '../_helpers'
 import { safePath } from '../_path'
 import { readJsonBody } from '@/app/api/_json'
 import { isSiteOwner } from '@/lib/auth/access'
@@ -11,7 +11,15 @@ import { loadNoGoPhrases } from '@/lib/content/no-go-phrases'
 import { readDraftTemplateVersion } from '@/lib/design/capabilities-read'
 import { contentPathToUrl } from '@/lib/editor/content-paths'
 import { isVerbatimPage } from '@/lib/content/verbatim-guard'
-import { proposalErrors, proposeRestructure, type RestructureProposeResponse } from '@/lib/content/restructure-page'
+import {
+  RESTRUCTURE_COMMIT_PREFIX,
+  proposalErrors,
+  proposeRestructure,
+  restructureStatus,
+  type RestructureProposeResponse,
+  type RestructureStatus,
+} from '@/lib/content/restructure-page'
+import { bodyBudgetFor, structureTypeForUrl } from '@/lib/content/page-structure'
 import { reviewContentEdit } from '@/lib/content/content-edit-review'
 import { diffLines } from '@/lib/design/design-md-adopt'
 import {
@@ -19,7 +27,7 @@ import {
   FileNotFoundError,
   StaleShaError,
   ensureDraftBranch,
-  listPathCommitMessages,
+  listPathCommits,
   readFile,
   writeFile,
 } from '@/lib/github/repo-files'
@@ -35,6 +43,8 @@ const DEADLINE_MS = 280_000
 interface ProposeBody {
   action?: 'propose'
   path?: string
+  // Admin-only: restructure a page that was already restructured.
+  override?: boolean
 }
 
 interface AcceptBody {
@@ -42,31 +52,64 @@ interface AcceptBody {
   path?: string
   proposed?: string
   expectedSha?: string
+  override?: boolean
 }
 
 type RestructureBody = ProposeBody | AcceptBody
 
-// POST { path } — propose a restructure (writes nothing).
-// POST { action: 'accept', path, proposed, expectedSha } — commit it to draft.
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const startedAt = Date.now()
-  const { id } = await params
+type PageTarget = { ctx: EditContext; path: string; url: string }
+
+// Gate + path validation shared by GET and POST. A whole-page AI rewrite has
+// the same boundary as the per-page AI editor (chat route): staff admins and
+// Site Owners only, not managers/editors.
+async function resolveTarget(id: string, rawPath: string | null | undefined): Promise<PageTarget | NextResponse> {
   const ctx = await resolveEditContext(id)
   if (ctx instanceof NextResponse) return ctx
-  // A whole-page AI rewrite: same boundary as the per-page AI editor (chat
-  // route) — staff admins and Site Owners only, not managers/editors.
   if (!(ctx.user.isAdmin || isSiteOwner(ctx.user))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  const path = rawPath ? safePath(rawPath) : null
+  const url = path && PAGE_MD_RE.test(path) ? contentPathToUrl(path) : null
+  if (!path || !url) return NextResponse.json({ error: 'Open a page to restructure it' }, { status: 400 })
+  return { ctx, path, url }
+}
 
+function alreadyRestructured(s: RestructureStatus): NextResponse {
+  return NextResponse.json(
+    {
+      error: `This page was already restructured${s.at ? ` on ${s.at.slice(0, 10)}` : ''}. An admin can run it again.`,
+      restructured: true,
+    },
+    { status: 409 },
+  )
+}
+
+// GET ?path= — has this page already been restructured? (drives the button)
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const target = await resolveTarget(id, new URL(req.url).searchParams.get('path'))
+  if (target instanceof NextResponse) return target
+  try {
+    const status = restructureStatus(await listPathCommits(target.ctx.githubRepo, target.path, DRAFT_BRANCH))
+    return NextResponse.json(status)
+  } catch (err) {
+    return internalError('edit:restructure:status', err, "Couldn't check the page's history")
+  }
+}
+
+// POST { path, override? } — propose a restructure (writes nothing).
+// POST { action: 'accept', path, proposed, expectedSha, override? } — commit it to draft.
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const startedAt = Date.now()
+  const { id } = await params
   const body = await readJsonBody<RestructureBody>(req)
   if (body instanceof NextResponse) return body
-  const path = body.path ? safePath(body.path) : null
-  if (!path || !PAGE_MD_RE.test(path)) {
-    return NextResponse.json({ error: 'Open a page to restructure it' }, { status: 400 })
+  const target = await resolveTarget(id, body.path)
+  if (target instanceof NextResponse) return target
+  const { ctx, path, url } = target
+  if (body.override && !ctx.user.isAdmin) {
+    return NextResponse.json({ error: 'Only an admin can restructure a page again.' }, { status: 403 })
   }
-  const url = contentPathToUrl(path)
-  if (!url) return NextResponse.json({ error: 'Open a page to restructure it' }, { status: 400 })
 
   const supabase = createServerClient()
   const { data: session, error: sessionErr } = await supabase
@@ -85,12 +128,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     await ensureDraftBranch(ctx.githubRepo)
-    const [current, templateVersion, noGo] = await Promise.all([
+    const [current, templateVersion, noGo, commits] = await Promise.all([
       readFile(ctx.githubRepo, path, DRAFT_BRANCH),
       readDraftTemplateVersion(ctx.githubRepo),
       loadNoGoPhrases(),
+      listPathCommits(ctx.githubRepo, path, DRAFT_BRANCH),
     ])
     const noGoPhrases = noGo.map((p) => p.phrase)
+    // One restructure per page (the approved shape stays put); admins may override.
+    const status = restructureStatus(commits)
+    if (status.restructured && !body.override) return alreadyRestructured(status)
 
     if (body.action === 'accept') {
       const { proposed, expectedSha } = body
@@ -111,7 +158,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         path,
         proposed,
         DRAFT_BRANCH,
-        `Restructure ${path.split('/').pop()} via AI${ctx.adminEmail ? ` (${ctx.adminEmail})` : ''}`,
+        `${RESTRUCTURE_COMMIT_PREFIX}${path.split('/').pop()} via AI${ctx.adminEmail ? ` (${ctx.adminEmail})` : ''}`,
         {
           expectedSha,
           authorName: ctx.adminName ?? DEFAULT_COMMIT_AUTHOR.name,
@@ -124,12 +171,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const overLimit = await checkChatSpendLimit(supabase, ctx.user)
     if (overLimit) return overLimit
-
-    // Hand edits ("via admin" saves) are worth a warning before a whole-page
-    // rewrite. Best-effort: an unreadable history just skips the notice.
-    const handEdited = listPathCommitMessages(ctx.githubRepo, path, DRAFT_BRANCH)
-      .then((msgs) => msgs.some((m) => /\bvia admin\b/i.test(m)))
-      .catch(() => false)
 
     const outcome = await proposeRestructure({
       file: current.content,
@@ -162,7 +203,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       violationsBefore: p.violationsBefore,
       violationsAfter: p.violationsAfter,
       diff: diffLines(current.content, p.proposed),
-      handEdited: await handEdited,
+      // Hand edits ("via admin" saves) are worth a warning before a whole-page rewrite.
+      handEdited: commits.some((c) => /\bvia admin\b/i.test(c.message)),
+      coverage: p.coverage,
+      budget: bodyBudgetFor(structureTypeForUrl(url)),
     }
     return NextResponse.json(response)
   } catch (err) {

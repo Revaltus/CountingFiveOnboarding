@@ -54,6 +54,7 @@ import { asJson } from '@/lib/supabase/json-typed'
 import { stripGeneratorNotesFromBody } from './strip-generator-notes'
 import { appendMissingSourceLinks, generateVerbatimPage } from './verbatim-page-generator'
 import { enforceVerbatimBios } from './verbatim-bios'
+import { CARD_ICON_NAMES } from './card-icons'
 import {
   FAQ_ANSWER_WORDS,
   FAQ_QUESTIONS,
@@ -449,7 +450,7 @@ Per-block item formats:
 
       Practice owners face billing complexity, staffing costs, and...
 
-  Pick the most specific fitting icon per item from this set (PascalCase, exact): Calculator, Briefcase, ChartLine, ChartBar, TrendingUp, FileText, FileCheck, ClipboardCheck, Coins, DollarSign, CreditCard, Wallet, PiggyBank, Receipt, Users, UserCheck, Building, Building2, Home, MapPin, Globe, ShieldCheck, Award, Star, BadgeCheck, Hammer, Wrench, Cog, HeartPulse, Stethoscope, GraduationCap, Scale, Gavel, Lightbulb, Target, Zap, Sparkles, Calendar, Clock. Never repeat an icon within one block.
+  Pick the most specific fitting icon per item from this set (PascalCase, exact): ${CARD_ICON_NAMES.join(', ')}. Never repeat an icon within one block.
 - content-cards: \`### Card Title\` then \`photo:\` and \`query:\` lines, then a 1–3 sentence excerpt, then an optional trailing \`[Read more](/url)\` link. The photo lines look like:
 
       ### Year-End Tax Planning Guide

@@ -1,0 +1,42 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`service page structure (locked) > service budget 1`] = `
+{
+  "cap": 800,
+  "max": 650,
+  "min": 500,
+}
+`;
+
+exports[`service page structure (locked) > service skeleton prompt 1`] = `
+"PAGE SKELETON (in this order; the hero is page metadata and the FAQ is inserted before the CTA):
+1. Acknowledgement [intro-text, 40-70 words]: In the reader's own vocabulary (e.g. retainage, progress billing): we get it and take it off your plate.
+2. Problem and solution [checklist-section (standalone) or feature-grid, 100-150 words]: Each of this reader's problems paired with our fix, as bullets.
+3. How it is delivered [content-split or checklist-section (standalone), 80-130 words]: What the client gets: deliverables, cadence, tools.
+4. Validation [stats-bar, logo-bar or intro-text, 40-80 words]: Proof from the firm context only (years, credentials, memberships), never invented.
+5. How we do it [process-steps, 80-120 words]: 3-5 short steps.
+6. Call to action [cta-banner, 30-60 words]: Page-specific offer; the button names the outcome.
+Body budget: 500-650 words before the FAQ, never over 800."
+`;
+
+exports[`service page structure (locked) > service skeleton prompt 2`] = `
+"PAGE SKELETON (in this order; the hero is page metadata and the FAQ is inserted before the CTA):
+1. Acknowledgement [intro-text, 40-70 words]: In the reader's own vocabulary (e.g. retainage, progress billing): we get it and take it off your plate.
+2. Problem and solution [checklist-section (standalone) or feature-grid, 100-150 words]: Each of this reader's problems paired with our fix, as bullets.
+3. How it is delivered [content-split or checklist-section (standalone), 80-130 words]: What the client gets: deliverables, cadence, tools.
+4. Validation [testimonials, 40-100 words]: Only real testimonials from the firm context, never invented.
+5. How we do it [process-steps, 80-120 words]: 3-5 short steps.
+6. Call to action [cta-banner, 30-60 words]: Page-specific offer; the button names the outcome.
+Body budget: 500-650 words before the FAQ, never over 800."
+`;
+
+exports[`service page structure (locked) > shared page rules 1`] = `
+"PAGE STRUCTURE RULES (user first, then search and AI):
+- Write for the person reading the page. Every section must earn its place; no section restates another.
+- Keep the body (everything except the FAQ) within the page's word budget: the one given with the PAGE SKELETON, else 500-650 words, never over 800.
+- Prefer bullets to paragraphs for benefits, deliverables, criteria and steps. Short paragraphs (2-3 sentences) elsewhere.
+- Use at most 2 content-split (text + image) sections per page and never two image-beside-text sections in a row. Lists go in checklist-section (standalone), process-steps or card grids.
+- The FAQ carries depth: 6-10 questions, 40-80 words each. Definitions, edge cases, how-it-works detail and keyword-rich explanation go there, not in the body. It stays collapsed for readers but is fully indexed.
+- Nothing useful to search or AI is dropped: every fact, keyword-bearing explanation, definition, stat, credential and internal link either stays in the body or becomes an FAQ answer.
+- End on ONE page-specific call to action. The button names the outcome for this reader (e.g. "Book a job-costing review"), never a generic label like "Learn More" or "Contact Us"."
+`;

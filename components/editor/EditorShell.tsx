@@ -1141,9 +1141,11 @@ export default function EditorShell({
           )}
           {isLivePage && selPageIsFile && (isAdmin || viewerIsOwner) && (
             <RestructureButton
+              key={selectedPath}
               sessionId={sessionId}
               path={selectedPath}
               isDirty={dirty.has(selectedPath)}
+              isAdmin={isAdmin}
               onAccepted={() => {
                 void reloadFile(selectedPath)
                 void refreshStatus()

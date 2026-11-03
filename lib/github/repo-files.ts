@@ -1546,13 +1546,19 @@ export type CommitFileStat = {
 // the raw material for per-page edit-activity stats. Cost is one getCommit call
 // per commit, so callers cache the aggregate by draft HEAD sha and only re-walk
 // when HEAD moves. `truncated` is true when history exceeds `cap`.
-// Recent commit messages that touched one path on a branch (newest first, one
-// API call). Used for cheap per-page "has hand edits" checks.
-export async function listPathCommitMessages(slug: string, path: string, branch: string, limit = 50): Promise<string[]> {
+export type PathCommit = { message: string; date: string | null; authorName: string | null }
+
+// Recent commits that touched one path on a branch (newest first, one API
+// call). Used for cheap per-page checks: hand edits, already restructured.
+export async function listPathCommits(slug: string, path: string, branch: string, limit = 50): Promise<PathCommit[]> {
   const octokit = getOctokit()
   const { owner, repo } = resolveRepo(slug)
   const res = await octokit.repos.listCommits({ owner, repo, sha: branch, path, per_page: limit })
-  return res.data.map((c) => c.commit.message)
+  return res.data.map((c) => ({
+    message: c.commit.message,
+    date: c.commit.author?.date ?? null,
+    authorName: c.commit.author?.name ?? null,
+  }))
 }
 
 export async function walkCommitFileStats(

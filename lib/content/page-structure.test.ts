@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { SessionSchema } from '@/types/session-schema'
 import {
   BODY_MAX_WORDS,
+  bodyBudgetFor,
   buildPageSkeleton,
   formatSkeleton,
   isCarouselBlock,
@@ -130,8 +131,8 @@ describe('structureTypeForUrl', () => {
 })
 
 describe('buildPageSkeleton', () => {
-  it('gives niche/service/location pages Wade’s order and nothing to other types', () => {
-    const slots = buildPageSkeleton('niche', { hasTestimonials: false, hasNichePricing: false })
+  it('gives service/location pages Wade’s order and nothing to other types', () => {
+    const slots = buildPageSkeleton('service', { hasTestimonials: false, hasNichePricing: false })
     expect(slots.map((s) => s.role)).toEqual([
       'Acknowledgement',
       'Problem and solution',
@@ -165,5 +166,43 @@ describe('isCarouselBlock', () => {
     expect(isCarouselBlock('hero', 'slider')).toBe(true)
     expect(isCarouselBlock('testimonials', 'grid')).toBe(false)
     expect(isCarouselBlock('content-split', 'image-right')).toBe(false)
+  })
+})
+
+describe('industry skeleton (Prime flow)', () => {
+  const slots = buildPageSkeleton('niche', { hasTestimonials: true, hasNichePricing: false })
+
+  it('follows the prime.cpa industry order', () => {
+    expect(slots.map((s) => s.role)).toEqual([
+      'Acknowledgement',
+      'Common challenges',
+      'The solution',
+      'How we help',
+      'Validation',
+      'Our model',
+      'Call to action',
+    ])
+  })
+
+  it('asks for exactly 4 challenges and 5 cards, with only two image sections, never adjacent', () => {
+    expect(slots.find((s) => s.role === 'Common challenges')?.guidance).toContain('Exactly 4')
+    expect(slots.find((s) => s.role === 'How we help')?.guidance).toContain('Exactly 5')
+    const imageIdx = slots.map((s, i) => (s.blocks.startsWith('content-split') ? i : -1)).filter((i) => i >= 0)
+    expect(imageIdx).toHaveLength(2)
+    expect(imageIdx[1] - imageIdx[0]).toBeGreaterThan(1)
+  })
+
+  it('has its own, longer body budget and states it in the prompt', () => {
+    expect(bodyBudgetFor('niche')).toEqual({ min: 750, max: 950, cap: 1100 })
+    expect(bodyBudgetFor('service')).toEqual({ min: 500, max: 650, cap: 800 })
+    const text = formatSkeleton(slots, 'niche')
+    expect(text).toContain('Body budget: 750-950 words before the FAQ, never over 1100.')
+    expect(text).toContain('keyword-rich detail')
+  })
+
+  it('judges industry pages against the industry cap, services against theirs', () => {
+    const m = { ...measurePageStructure('<!-- block: intro-text -->\n## A\n\nx\n'), bodyWords: 900 }
+    expect(structureViolations(m, 'niche').map((v) => v.code)).not.toContain('body_too_long')
+    expect(structureViolations(m, 'service').map((v) => v.code)).toContain('body_too_long')
   })
 })

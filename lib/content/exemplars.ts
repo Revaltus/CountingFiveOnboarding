@@ -84,15 +84,13 @@ export const OUTLINE_EXEMPLAR = `EXAMPLE OF A STRONG OUTLINE (note how each desc
 {
   "h1": "Accounting for construction contractors",
   "sections": [
-    { "h2": "Books that keep up with retainage and progress billing", "description": "Acknowledgement in the owner's own vocabulary (retainage, WIP, progress billing): we know why contractor books fall behind and we take that off your plate.", "word_count": 60 },
-    { "h2": "Where contractor cash goes missing", "description": "Problem/solution as bullets: profitable-on-paper but cash-poor, untracked job costs, surprise tax bills in lumpy years, each paired with the fix.", "word_count": 130 },
-    { "h2": "What you get every month", "description": "How it's delivered: WIP schedule, job-cost report, estimated-tax calendar, bonding-ready statements. Bullets; name the firm's Sage Intacct expertise.", "word_count": 110 },
-    { "h2": "Contractors who bid bigger with clean financials", "description": "Validation from the firm context only: the bonding-ready reviewed statements proof point. Never invent a client or number.", "word_count": 60 },
-    { "h2": "How we work with your team", "description": "Process steps: discovery call, cleanup, monthly close, quarterly planning. One or two sentences each.", "word_count": 100 },
-    { "h2": "Get a job-costing review", "description": "Page-specific CTA: a job-costing review for contractors, button 'Book a job-costing review' to /contact.", "word_count": 40 }
+    { "h2": "Books that keep up with retainage and progress billing", "description": "Acknowledge the owner's world in their terms (retainage, WIP, progress billing).", "word_count": 60 },
+    { "h2": "Where contractor cash goes missing", "description": "Bullets: untracked job costs, surprise tax bills in lumpy years, each with the fix.", "word_count": 130 },
+    { "h2": "What you get every month", "description": "WIP schedule, job-cost report, bonding-ready statements; name the firm's Sage Intacct expertise.", "word_count": 110 },
+    { "h2": "Get a job-costing review", "description": "Page-specific CTA to /contact: 'Book a job-costing review'.", "word_count": 40 }
   ],
   "target_keyword": "accounting for construction contractors",
-  "notes": "Write to the owner-operator, not a CFO. Lead with cash flow, not compliance. Detail on WIP methods and bonding requirements goes in the FAQ."
+  "notes": "Write to the owner-operator. Detail on WIP methods and bonding goes in the FAQ."
 }`
 
 // Good/bad short-copy example for the interactive Generate Content assistant
