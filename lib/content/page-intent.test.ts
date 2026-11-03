@@ -83,6 +83,18 @@ describe('resolvePageIntent', () => {
     expect(resolvePageIntent('/who-we-serve/construction-contractors', 'Contractors', schema).type).toBe('niche')
   })
 
+  it('treats a top-level page named after a service or niche as that page', () => {
+    const service = resolvePageIntent('/tax-planning', 'Tax Planning', schema)
+    expect(service.type).toBe('service')
+    expect(service.focusBlock).toContain('Estimated payments')
+    expect(resolvePageIntent('/construction-contractors', 'Contractors', schema).type).toBe('niche')
+  })
+
+  it('needs an exact name match at the top level (no /tax or /team surprises)', () => {
+    expect(resolvePageIntent('/tax', 'Tax', schema).type).toBe('generic')
+    expect(resolvePageIntent('/team', 'Team', schema).type).toBe('generic')
+  })
+
   it('classifies a location page and names the city', () => {
     const intent = resolvePageIntent('/locations/tyngsborough', 'Tyngsborough', schema)
     expect(intent.type).toBe('location')

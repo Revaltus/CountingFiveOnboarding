@@ -19,7 +19,8 @@ import {
 } from '@/lib/github/repo-files'
 import type { SessionSchema } from '@/types/session-schema'
 import type { PaletteData } from '@/types/palette'
-import { bodyBudgetFor, skeletonPromptFor, structureTypeForUrl } from './page-structure'
+import { bodyBudgetFor, skeletonPromptFor } from './page-structure'
+import { resolvePageIntent } from './page-intent'
 
 const DEFAULT_CTA: Cta = { text: 'Schedule a consultation', url: '/contact' }
 
@@ -46,7 +47,7 @@ async function deriveOutline(args: {
   sessionId: string
 }): Promise<{ sections: OutlineSection[]; targetKeyword: string }> {
   const firmName = args.schema.business?.name ?? 'the firm'
-  const pageType = structureTypeForUrl(args.url)
+  const pageType = resolvePageIntent(args.url, args.title, args.schema).type
   const skeleton = skeletonPromptFor(pageType, args.schema)
   const budget = bodyBudgetFor(pageType)
   const fallback = {

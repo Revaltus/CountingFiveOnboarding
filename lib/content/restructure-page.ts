@@ -26,8 +26,8 @@ import {
   PAGE_STRUCTURE_RULES,
   measurePageStructure,
   renderedBody,
+  bodyBudgetFor,
   skeletonPromptFor,
-  structureTypeForUrl,
   structureViolations,
   type BodyBudget,
   type PageStructureMetrics,
@@ -47,6 +47,7 @@ export type RestructureProposal = {
   violationsBefore: StructureViolation[]
   violationsAfter: StructureViolation[]
   coverage: ContentCoverage
+  budget: BodyBudget
 }
 
 // Body of POST /api/edit/[id]/restructure (propose).
@@ -284,7 +285,7 @@ function dynamicSuffix(args: {
   violations: StructureViolation[]
   fixNotes: string[]
 }): string {
-  const type = structureTypeForUrl(args.url)
+  const type = resolvePageIntent(args.url, args.title, args.schema).type
   const skeleton = skeletonPromptFor(type, args.schema)
   const notes = type === 'niche'
     ? `\nPAGE NOTES: return "faq_heading" as "Common questions from <this audience>" (e.g. "Common questions from contractors").\n`
@@ -324,12 +325,13 @@ const MIN_ATTEMPT_MS = 90_000
 export async function proposeRestructure(args: RestructureArgs): Promise<RestructureOutcome> {
   const { frontmatter } = splitFile(args.file)
   const title = pageTitle(frontmatter)
-  const type = structureTypeForUrl(args.url)
+  const intent = resolvePageIntent(args.url, title, args.schema)
+  const type = intent.type
   const { body, faq } = splitOutFaq(args.file)
   const before = measurePageStructure(args.file, { faqCount: faq.length })
   const violationsBefore = structureViolations(before, type)
   const prefix = staticPrefix(args.schema, args.noGoPhrases, args.templateVersion)
-  const nicheKeywords = type === 'niche' ? realStrings(resolvePageIntent(args.url, title, args.schema).niche?.keywords) : []
+  const nicheKeywords = type === 'niche' ? realStrings(intent.niche?.keywords) : []
 
   let fixNotes: string[] = []
   let lastErrors: string[] = []
@@ -387,6 +389,7 @@ export async function proposeRestructure(args: RestructureArgs): Promise<Restruc
           violationsBefore,
           violationsAfter: structureViolations(after, type),
           coverage: contentCoverage(args.file, proposed, nicheKeywords),
+          budget: bodyBudgetFor(type),
         },
       }
     }

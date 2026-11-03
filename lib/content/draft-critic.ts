@@ -9,7 +9,8 @@ import { parseCritic, criticFailsThreshold, type CriticReview, type ParsedCritic
 import type { SessionSchema } from '@/types/session-schema'
 import type { Json } from '@/types/database'
 import type { TokenStage } from './token-pricing'
-import { bodyBudgetFor, structureTypeForUrl, usesSkeleton } from './page-structure'
+import { bodyBudgetFor, usesSkeleton } from './page-structure'
+import { resolvePageIntent, type PageIntentType } from './page-intent'
 
 export interface DraftCriticInput {
   pageId: string
@@ -39,8 +40,7 @@ function faqPairs(raw: unknown): FaqPair[] {
 // Lean pages (page-structure.ts) keep the body short and put depth in the FAQ.
 // Without this the critic reads a short body as thin and its auto-rewrite
 // would put the bulk straight back.
-function pageShapeBlock(pageUrl: string, faq: FaqPair[]): string {
-  const type = structureTypeForUrl(pageUrl)
+function pageShapeBlock(type: PageIntentType, faq: FaqPair[]): string {
   const lean = usesSkeleton(type)
   const budget = bodyBudgetFor(type)
   const faqText = faq.length
@@ -87,7 +87,7 @@ export async function scoreDraft(
 
   const brandVoice = buildBrandVoiceBlock(input.schema)
   const firmContext = buildFirmContext(input.schema)
-  const shapeBlock = pageShapeBlock(input.pageUrl, faqPairs(input.faq))
+  const shapeBlock = pageShapeBlock(resolvePageIntent(input.pageUrl, input.pageTitle, input.schema).type, faqPairs(input.faq))
   const competitorExcerpts = truncateToTokenBudget(
     input.competitorRefs
       .slice(0, 3)

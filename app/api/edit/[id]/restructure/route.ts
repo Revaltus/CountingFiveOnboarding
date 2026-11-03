@@ -19,7 +19,6 @@ import {
   type RestructureProposeResponse,
   type RestructureStatus,
 } from '@/lib/content/restructure-page'
-import { bodyBudgetFor, structureTypeForUrl } from '@/lib/content/page-structure'
 import { reviewContentEdit } from '@/lib/content/content-edit-review'
 import { diffLines } from '@/lib/design/design-md-adopt'
 import {
@@ -206,7 +205,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // Hand edits ("via admin" saves) are worth a warning before a whole-page rewrite.
       handEdited: commits.some((c) => /\bvia admin\b/i.test(c.message)),
       coverage: p.coverage,
-      budget: bodyBudgetFor(structureTypeForUrl(url)),
+      budget: p.budget,
     }
     return NextResponse.json(response)
   } catch (err) {

@@ -20,6 +20,7 @@ import { runAllSpecialists } from './specialists/run'
 import { mergeFindings } from './merge'
 import { protectedTextsFor } from './protected'
 import { judgeFindings, judgeUnavailableFinding, dedupeFindings, qaPasses, agentScores } from './judge'
+import { resolvePageIntent } from '@/lib/content/page-intent'
 
 type Supabase = ReturnType<typeof createServerClient>
 type PageUpdate = Database['public']['Tables']['generated_pages']['Update']
@@ -115,6 +116,7 @@ export async function runQaForPage(
     const rules = runRules({
       body,
       pageUrl: row.page_url,
+      pageType: resolvePageIntent(row.page_url, row.page_title, ctx.schema).type,
       metaTitle: row.meta_title,
       metaDescription: row.meta_description,
       heroBlock: row.hero_block,

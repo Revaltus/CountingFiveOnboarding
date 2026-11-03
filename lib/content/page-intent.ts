@@ -219,5 +219,16 @@ function resolveBaseIntent(pageUrl: string, pageTitle: string, schema: SessionSc
     return { type: 'location', city, focusBlock: buildLocationFocus(city, findArea(citySlug)) }
   }
 
+  // A top-level page named after one of the firm's own services or niches
+  // (/agriculture, /business-tax) is that page, hub path or not.
+  // Exact name match only: outside a hub, containment would turn /tax or /team
+  // into a service page.
+  if (segs.length === 1) {
+    const service = services.find((sv) => slugify(s(sv.name)) === head)
+    if (service) return { type: 'service', service, focusBlock: buildServiceFocus(service) }
+    const niche = niches.find((n) => slugify(s(n.name)) === head)
+    if (niche) return { type: 'niche', niche, focusBlock: buildNicheFocus(niche, schema) }
+  }
+
   return { type: 'generic', focusBlock: '' }
 }

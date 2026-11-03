@@ -3,9 +3,9 @@
 // rewrite, which no QA patch can make; the editor's Restructure compare does it.
 import { randomUUID } from 'node:crypto'
 import type { Finding, QaSeverity } from '@/types/qa-review'
+import type { PageIntentType } from '@/lib/content/page-intent'
 import {
   measurePageStructure,
-  structureTypeForUrl,
   structureViolations,
   type StructureViolationCode,
 } from '@/lib/content/page-structure'
@@ -22,10 +22,10 @@ const SEVERITY: Record<StructureViolationCode, QaSeverity> = {
   content_after_faq: 'low',
 }
 
-export function checkPageStructure(body: string, pageUrl: string, faqBlock: unknown): Finding[] {
+export function checkPageStructure(body: string, pageType: PageIntentType, faqBlock: unknown): Finding[] {
   const faqCount = Array.isArray(faqBlock) ? faqBlock.length : 0
   const metrics = measurePageStructure(body, { faqCount })
-  return structureViolations(metrics, structureTypeForUrl(pageUrl)).map((v) => ({
+  return structureViolations(metrics, pageType).map((v) => ({
     id: randomUUID(),
     agent: 'rules',
     severity: SEVERITY[v.code],
