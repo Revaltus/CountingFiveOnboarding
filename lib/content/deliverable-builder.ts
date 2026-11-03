@@ -410,8 +410,9 @@ export function appendFaqBlock(page: GeneratedPage): string {
   )
   if (items.length === 0) return content
 
-  // Build FAQ section
-  const headline = `Frequently Asked Questions About ${page.page_title}`
+  // Build FAQ section. Industry pages carry a Prime-style heading
+  // ("Common questions from contractors"); others use the default.
+  const headline = page.faq_heading?.trim() || `Frequently Asked Questions About ${page.page_title}`
   const faqMarkdown = items
     .map(({ question, answer }) => `**Q: ${question}**\nA: ${answer}`)
     .join('\n\n')

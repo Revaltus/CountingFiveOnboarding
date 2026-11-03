@@ -1092,6 +1092,7 @@ export type Database = {
           critic_review: Json | null
           eeat_signals: Json | null
           faq_block: Json | null
+          faq_heading: string | null
           generation_attempts: number
           generation_error: string | null
           generation_started_at: string | null
@@ -1132,6 +1133,7 @@ export type Database = {
           critic_review?: Json | null
           eeat_signals?: Json | null
           faq_block?: Json | null
+          faq_heading?: string | null
           generation_attempts?: number
           generation_error?: string | null
           generation_started_at?: string | null
@@ -1172,6 +1174,7 @@ export type Database = {
           critic_review?: Json | null
           eeat_signals?: Json | null
           faq_block?: Json | null
+          faq_heading?: string | null
           generation_attempts?: number
           generation_error?: string | null
           generation_started_at?: string | null

@@ -78,7 +78,7 @@ function goodResult(overrides: Partial<GeneratedResult> = {}): GeneratedResult {
     metadata: {
       meta_title: 't', meta_description: 'd', target_keyword: 'tax', secondary_keywords: [],
       url_slug: 'tax', canonical_url: 'https://example.com/services/tax', answer_block: 'a',
-      schema_markup_type: 'Service', eeat_signals: [], internal_links: [], faq_block: [],
+      schema_markup_type: 'Service', eeat_signals: [], internal_links: [], faq_block: [], faq_heading: null,
       llm_citation_note: '', hero_block: '', hero_variant: null, hero_image: null,
       hero_image_alt: null, hero_subhead: null, hero_image_query: null,
     },

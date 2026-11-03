@@ -262,6 +262,8 @@ export type GeneratedResult = {
     eeat_signals: string[]
     internal_links: Array<{ url: string; anchor_text: string; reason: string }>
     faq_block: Array<{ question: string; answer: string }>
+    // Industry pages only: "Common questions from <audience>"; null = default heading.
+    faq_heading: string | null
     llm_citation_note: string
     hero_block: string
     hero_variant: string | null
@@ -376,6 +378,7 @@ OUTPUT: Return a JSON object with two keys:
    - eeat_signals (array of specific credential/experience claims)
    - internal_links (array of {url, anchor_text, reason}. ONLY use URLs from this exact list — never invent paths: ${sitemapUrls.join(' ')}. The same rule applies to every relative link you write in the body copy.)
    - faq_block (array of {question, answer} — ${FAQ_QUESTIONS.min}-${FAQ_QUESTIONS.max} questions, ${FAQ_ANSWER_WORDS.min}-${FAQ_ANSWER_WORDS.max} words per answer. This is where the page's depth lives: definitions, edge cases, how-it-works detail and long-tail search questions the lean body leaves out. Never repeat a body sentence.)
+   - faq_heading (string or null — only when PAGE NOTES ask for one; null otherwise)
    - llm_citation_note (what structured claim an AI tool would most likely cite)
    - hero_block (one of: "hero", "hero-split", "page-header")
    - hero_variant (string or null — required for "hero" and "hero-split"; null for "page-header")
@@ -514,7 +517,9 @@ ${WRITING_EXAMPLES}${noGoBlock ? `\n\n${noGoBlock}` : ''}`
   const intent = resolvePageIntent(pageUrl, pageTitle, schema)
   const focusNote = intent.focusBlock ? `\n\n${intent.focusBlock}` : ''
   const skeleton = skeletonPromptFor(intent.type, schema)
-  const skeletonNote = skeleton ? `\n\n${skeleton}` : ''
+  const skeletonNote = skeleton
+    ? `\n\n${skeleton}${intent.type === 'niche' ? `\nPAGE NOTES: set metadata.faq_heading to "Common questions from <this audience>" (e.g. "Common questions from contractors").` : ''}`
+    : ''
 
   // Editorial-review guidance from the draft critic on a targeted regeneration —
   // the specific defects (likely-fabricated specifics, quality notes) the rewrite
@@ -600,6 +605,9 @@ ${mergedContent ? `CONTENT MERGED INTO THIS PAGE (an operator folded these curre
             eeat_signals: parsed.metadata?.eeat_signals ?? [],
             internal_links: parsed.metadata?.internal_links ?? [],
             faq_block: parsed.metadata?.faq_block ?? [],
+            faq_heading: typeof parsed.metadata?.faq_heading === 'string' && parsed.metadata.faq_heading.trim()
+              ? parsed.metadata.faq_heading.trim().slice(0, 120)
+              : null,
             llm_citation_note: parsed.metadata?.llm_citation_note ?? '',
             hero_block: parsed.metadata?.hero_block ?? 'page-header',
             hero_variant: parsed.metadata?.hero_variant ?? null,
@@ -657,6 +665,7 @@ ${mergedContent ? `CONTENT MERGED INTO THIS PAGE (an operator folded these curre
       eeat_signals: [],
       internal_links: [],
       faq_block: [],
+      faq_heading: null,
       llm_citation_note: '',
       hero_block: 'page-header',
       hero_variant: null,
@@ -944,6 +953,10 @@ export async function generateAndFinalizePage(input: FinalizePageInput): Promise
   result.content = humanizeDashes(result.content)
   result.metadata.meta_description = humanizeDashes(result.metadata.meta_description)
   result.metadata.answer_block = humanizeDashes(result.metadata.answer_block)
+  // The Prime-style FAQ heading belongs to industry pages; everything else
+  // keeps the default heading (the service shape is locked).
+  result.metadata.faq_heading =
+    intent.type === 'niche' && result.metadata.faq_heading ? humanizeDashes(result.metadata.faq_heading) : null
   result.metadata.faq_block = result.metadata.faq_block.map(f => ({
     ...f,
     answer: humanizeDashes(f.answer),
@@ -1268,6 +1281,7 @@ function pageContentFields(result: GeneratedResult, outlineSections: Json) {
     eeat_signals: asJson(result.metadata.eeat_signals),
     internal_links: asJson(result.metadata.internal_links),
     faq_block: asJson(result.metadata.faq_block),
+    faq_heading: result.metadata.faq_heading,
     llm_citation_note: result.metadata.llm_citation_note,
     hero_block: result.metadata.hero_block,
     hero_variant: result.metadata.hero_variant,

@@ -17,6 +17,7 @@ function makePage(overrides: Partial<GeneratedPage>): GeneratedPage {
     critic_review: null,
     eeat_signals: null,
     faq_block: null,
+    faq_heading: null,
     generation_attempts: 0,
     generation_error: null,
     generation_started_at: null,

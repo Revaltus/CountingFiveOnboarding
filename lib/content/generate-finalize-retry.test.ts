@@ -16,11 +16,11 @@ import type { SessionSchema } from '@/types/session-schema'
 const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ')
 const faq = Array.from({ length: 7 }, (_, i) => ({ question: `Q${i}?`, answer: words(50) }))
 
-function page(body: string) {
+function page(body: string, extra: Record<string, unknown> = {}) {
   return {
     text: JSON.stringify({
       content: body,
-      metadata: { meta_title: 'T', faq_block: faq, hero_block: 'page-header', target_keyword: 'k' },
+      metadata: { meta_title: 'T', faq_block: faq, hero_block: 'page-header', target_keyword: 'k', ...extra },
     }),
     usage: { inputTokens: 10, outputTokens: 10 },
     finishReason: 'stop',
@@ -78,5 +78,21 @@ describe('generateAndFinalizePage — page-structure retry', () => {
     h.generateText.mockResolvedValueOnce(page(oneList))
     await generateAndFinalizePage(input)
     expect(h.generateText).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('generateAndFinalizePage — FAQ heading', () => {
+  beforeEach(() => h.generateText.mockReset())
+
+  it('keeps the Prime-style heading on industry pages', async () => {
+    h.generateText.mockResolvedValueOnce(page(lean, { faq_heading: 'Common questions from dentists' }))
+    const result = await generateAndFinalizePage(input)
+    expect(result.metadata.faq_heading).toBe('Common questions from dentists')
+  })
+
+  it('drops it on service pages (locked shape keeps the default heading)', async () => {
+    h.generateText.mockResolvedValueOnce(page(lean, { faq_heading: 'Common questions from dentists' }))
+    const result = await generateAndFinalizePage({ ...input, pageUrl: '/services/payroll' })
+    expect(result.metadata.faq_heading).toBeNull()
   })
 })

@@ -73,7 +73,7 @@ export type PageResearch = {
 const OUTLINE_INPUT_TOKEN_TARGET = 6000
 
 // Outline-only trims (the page writer keeps its fuller inputs).
-const OUTLINE_MAX_SECONDARY_KEYWORDS = 10
+const OUTLINE_MAX_SECONDARY_KEYWORDS = 8
 const OUTLINE_COMPETITOR_EXCERPT_CHARS = 250
 
 // Strip what a raw scrape drags along: HTML entities, "Skip to content",
@@ -187,28 +187,25 @@ OUTPUT FORMAT (JSON only, no prose):
 {
   "h1": "...",
   "sections": [
-    { "h2": "...", "description": "A specific brief for the copywriter: the angle this section takes AND which concrete input it draws on — the exact niche persona/pain, the proof point or credential, or the keyword it targets.", "word_count": 150 }
+    { "h2": "...", "description": "Working brief: the section's angle and the concrete input it uses (a niche pain, a proof point or credential, or the keyword).", "word_count": 150 }
   ],
   "target_keyword": "...",
-  "notes": "Optional: anything the copywriter should know about tone or angle for this page."
+  "notes": "Optional tone or angle notes for the copywriter."
 }
 
 RULES:
-- 3–6 body sections per page. When the page has a PAGE SKELETON below, follow its order and roles exactly (one section per slot; the hero and FAQ are added outside the outline)
-- H1 must contain or closely relate to the target keyword
-- Section descriptions are a WORKING BRIEF, not a topic label. Each must name the concrete material the copywriter should use — a specific niche audience and their pain, a real credential or proof point from the firm context, or the keyword the section targets. Generic placeholders ("Add content here", "Overview of services", "Introduction to the topic") are unacceptable — every description must be specific enough that two different writers would produce the same-shaped section.
-- Body word counts should total the PAGE SKELETON's body budget (without one: ${DEFAULT_BODY_BUDGET.min}–${DEFAULT_BODY_BUDGET.max}, never over ${DEFAULT_BODY_BUDGET.cap}). Depth, definitions and edge cases belong in the page FAQ, not in more sections
-- Each section has one job; never plan two sections that cover the same point
-- Do not write any actual copy — structure only
+- 3–6 body sections. With a PAGE SKELETON below, follow its order and roles exactly (one section per slot; the hero and FAQ sit outside the outline)
+- The H1 contains or closely relates to the target keyword
+- Each description is a WORKING BRIEF naming the concrete material to use: a specific niche audience and pain, a real credential or proof point from the firm context, or the target keyword. No generic placeholders ("Overview of services", "Introduction to the topic"); two writers should produce the same-shaped section from it
+- Word counts total the PAGE SKELETON's body budget (without one: ${DEFAULT_BODY_BUDGET.min}–${DEFAULT_BODY_BUDGET.max}, never over ${DEFAULT_BODY_BUDGET.cap}). Depth, definitions and edge cases go in the page FAQ, not extra sections
+- One job per section, no overlap. Structure only, no copy
 
 ${OUTLINE_EXEMPLAR}
 
 HEADING RULES (h1 and every h2):
-- Specific and benefit-driven, in sentence case
-- No parenthetical subtitles, e.g. "(Beyond the Buzzwords)"
-- No colon-cliché subtitles ("A Deep Dive", "A Complete/Ultimate Guide", "Everything You Need to Know")
-- Never "What X Actually Means", "Beyond the …", "The Importance of …", "A Closer Look", "Demystifying/Decoding/Unpacking", or listicle titles ("5 Reasons …")
-- No dashes (— or –) in any heading${noGoBlock ? `\n\n${noGoBlock}` : ''}`
+- Specific, benefit-driven, sentence case, no dashes (— or –)
+- No parenthetical or colon-cliché subtitles ("(Beyond the Buzzwords)", "A Deep Dive", "A Complete Guide", "Everything You Need to Know")
+- Never "What X Actually Means", "Beyond the …", "The Importance of …", "A Closer Look", "Demystifying/Decoding/Unpacking", or listicles ("5 Reasons …")${noGoBlock ? `\n\n${noGoBlock}` : ''}`
 
   // Per-page dynamic suffix — everything that varies per page, kept out of the
   // cached prefix. The page-intent focus block points the model at the ONE niche

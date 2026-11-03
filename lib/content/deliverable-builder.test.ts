@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAllPageFiles, buildPageMarkdown, internalizeHref, toPagePath } from './deliverable-builder'
+import { appendFaqBlock, buildAllPageFiles, buildPageMarkdown, internalizeHref, toPagePath } from './deliverable-builder'
 import type { Database } from '@/types/database'
 
 type GeneratedPage = Database['public']['Tables']['generated_pages']['Row']
@@ -16,6 +16,7 @@ function makePage(overrides: Partial<GeneratedPage>): GeneratedPage {
     critic_review: null,
     eeat_signals: null,
     faq_block: null,
+    faq_heading: null,
     generation_attempts: 0,
     generation_error: null,
     generation_started_at: null,
@@ -265,5 +266,17 @@ describe('buildPageMarkdown — hero headline', () => {
       websiteUrl: 'https://x.com',
     })
     expect(out).not.toMatch(/^hero_headline:/m)
+  })
+})
+
+describe('appendFaqBlock heading', () => {
+  const faq = [{ question: 'How is pricing set?', answer: 'A fixed monthly fee.' }]
+  it('uses the stored industry heading', () => {
+    const md = appendFaqBlock(makePage({ faq_block: faq, faq_heading: 'Common questions from contractors' }))
+    expect(md).toContain('## Common questions from contractors')
+  })
+  it('falls back to the default heading', () => {
+    const md = appendFaqBlock(makePage({ faq_block: faq, page_title: 'Payroll' }))
+    expect(md).toContain('## Frequently Asked Questions About Payroll')
   })
 })
