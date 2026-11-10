@@ -43,7 +43,8 @@ export const DESIGN_CRITIC_MODEL = 'claude-opus-5-5'
 // says otherwise.
 // A/B 2026-09-26 (bblcpa): Opus 5.5 kept as DESIGN_MODEL — Fable 5.1 scored +0.09 mean at 2.3× the cost and 24% slower.
 // (DESIGN_MODEL has since moved to Sonnet 5.5 — see above.)
-export const DESIGN_AB_CHALLENGER_MODEL = 'claude-fable-5-1'
+// 2026-11-10: moved to Fable 5.2 (20% cheaper than 5.1; same capability set).
+export const DESIGN_AB_CHALLENGER_MODEL = 'claude-fable-5-2'
 
 // Sonnet 5.5 (released 2026-09-28) is the challenger in the compare-*-models.ts
 // A/B scripts. No route uses it until those runs justify a tier change.

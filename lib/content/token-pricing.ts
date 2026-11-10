@@ -68,10 +68,11 @@ const PRICING: Record<string, Rate & { longPrompt?: Rate & { threshold: number }
   'claude-opus-4-8': { input: 5, output: 25 },
   // Opus 5.5 bills cache hits at 0.05x input rather than the standard 0.1x.
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.05 },
-  // Fable 5.1 — 5x Sonnet 5 per the CLAUDE.md tier map. Only the design-model
-  // A/B script calls it. Verify against Anthropic's price list before relying
-  // on its recorded cost.
-  'claude-fable-5-1': { input: 10, output: 50 },
+  // Fable 5.1 / 5.2 — A/B challengers only (no production route). Cache hits
+  // bill at 0.025x input ($0.25 / $0.20 per MTok), per Anthropic's price list
+  // (checked 2026-11-10).
+  'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.025 },
+  'claude-fable-5-2': { input: 8, output: 40, cacheRead: 0.025 },
   // $2/$10 launched as intro pricing and became the standard rate on 2026-09-01
   // (the scheduled rise to $3/$15 was cancelled).
   'claude-sonnet-5': { input: 2, output: 10 },

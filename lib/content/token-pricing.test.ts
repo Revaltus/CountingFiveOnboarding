@@ -72,8 +72,9 @@ describe('design studio model pricing', () => {
     expect(estimateCostUsd(DESIGN_CRITIC_MODEL, M, M)).toBeCloseTo(24)
   })
 
-  it('prices the A/B challenger (Fable 5.1) at 5x Sonnet 5 ($10/$50)', () => {
-    expect(DESIGN_AB_CHALLENGER_MODEL).toBe('claude-fable-5-1')
-    expect(estimateCostUsd(DESIGN_AB_CHALLENGER_MODEL, M, M)).toBeCloseTo(60)
+  it('prices the A/B challenger (Fable 5.2) at $8/$40 with 0.025x cache hits', () => {
+    expect(DESIGN_AB_CHALLENGER_MODEL).toBe('claude-fable-5-2')
+    expect(estimateCostUsd(DESIGN_AB_CHALLENGER_MODEL, M, M)).toBeCloseTo(48)
+    expect(estimateCostUsd(DESIGN_AB_CHALLENGER_MODEL, M, 0, M)).toBeCloseTo(0.2)
   })
 })

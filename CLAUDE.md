@@ -140,7 +140,7 @@ Interactive chat (`/api/chat`) stays Sonnet/Haiku — never use Sonnet for phase
 ```typescript
 const modelId = [3, 4].includes(session.current_phase) ? INTERACTIVE_CHAT_MODEL : FAST_MODEL
 ```
-Tier map (reviewed 2026-10-09 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5 lineup):
+Tier map (reviewed 2026-11-10 against the Fable 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5 lineup):
 - **Sonnet 5.5** (`PUBLISHED_CONTENT_MODEL`) — all async content writing: the published
   page-body generator (`lib/content/content-generator.ts`) and the audit→session draft
   (`lib/session-draft/draft-from-audit.ts`), plus outlines, sitemap proposal, MBP/draft JSON and
@@ -187,8 +187,14 @@ Tier map (reviewed 2026-10-09 against the Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Ha
 - **Opus 5.5** (`DESIGN_CRITIC_MODEL`) — Design Studio's vision critique, which gates
   keep/revise. It stays a stronger tier than `DESIGN_MODEL` so the generator never grades its own
   concepts. It's also the A/B script's default judge.
-- **Fable 5.1** (`DESIGN_AB_CHALLENGER_MODEL`) — only the Design Studio A/B script
-  (`scripts/compare-design-models.ts`, P7); never a production route at 5x Sonnet's price. The
+- **Fable 5.2** (`DESIGN_AB_CHALLENGER_MODEL`) — only the Design Studio A/B script
+  (`scripts/compare-design-models.ts`, P7); never a production route ($8/$40, 4x Sonnet). Replaced
+  Fable 5.1 as the challenger on 2026-11-10. That day's review A/B'd it against the production tiers
+  and kept both:
+  - writer (5 pages, Opus judge): 7.18 vs Sonnet 5.5's 6.54, fewer missing sections, but 3.3 vs 2.8
+    unsupported claims/page, 200s vs 121s/page with 1 timeout, $0.88 vs $0.19/page;
+  - critic (5 pages): 15 vs 8 claims flagged, but lower precision, it missed claims Opus caught, and
+    ~20s vs 12s at 2x the price. The
   script judges both sides with `PUBLISHED_CONTENT_MODEL` (Sonnet 5.5) by default (`--critic`). When Sonnet 5.5 is itself a contender, pass a non-contender judge (e.g. `--critic claude-fable-5-1`); the script warns when the judge is a contender.
 
 The async generation paths use adaptive thinking + `effort` via the shared
