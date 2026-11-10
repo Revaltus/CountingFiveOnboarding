@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireOnboardingSessionAccess, type CurrentUser } from '@/lib/auth/access'
+import { getCurrentUser, requireOnboardingSessionAccess, type CurrentUser } from '@/lib/auth/access'
 import { isUuid } from '@/lib/design/input-validation'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
@@ -11,6 +11,9 @@ export type VisibilityReportRow = Database['public']['Tables']['visibility_repor
 export async function loadReportForUser(
   reportId: string,
 ): Promise<{ user: CurrentUser; report: VisibilityReportRow } | NextResponse> {
+  // Authenticate before the lookup so an anonymous caller can't probe which
+  // report ids exist (404 vs 401).
+  if (!(await getCurrentUser())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isUuid(reportId)) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   const { data: report, error } = await createServerClient()
     .from('visibility_reports')
