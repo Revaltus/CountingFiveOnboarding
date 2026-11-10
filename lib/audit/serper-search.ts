@@ -17,6 +17,27 @@ export function serperEnabled(): boolean {
   return !!process.env.SERPER_API_KEY
 }
 
+/** The domain's best organic position for a query. `{ position: null }` = the
+ * search ran and the domain isn't in the results; null = it could not run. */
+export async function rankFor(
+  query: string,
+  domain: string,
+  opts: { location?: string } = {},
+): Promise<{ position: number | null; url: string | null } | null> {
+  const results = await serperSearch(query, opts)
+  if (!results) return null
+  const target = domain.toLowerCase().replace(/^www\./, '')
+  const hit = results.find((r) => {
+    try {
+      const host = new URL(r.link).hostname.toLowerCase().replace(/^www\./, '')
+      return host === target || host.endsWith(`.${target}`)
+    } catch {
+      return false
+    }
+  })
+  return hit ? { position: hit.position, url: hit.link } : { position: null, url: null }
+}
+
 /** Run one Google organic search. Returns the organic results, or null when no
  * key is set or the request fails. `gl`/`location` bias results geographically
  * (Serper accepts a free-text `location`, e.g. "Port Arthur, Texas, United
