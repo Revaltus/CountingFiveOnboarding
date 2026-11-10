@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AUDIENCES } from '@/lib/visibility/audiences'
 import type { AudienceScores } from '@/lib/visibility/types'
-import { AUD_BG } from './audience-styles'
+import { AudienceScoreChip } from './AudienceBadge'
 
 export interface ReportListRow {
   id: string
@@ -102,13 +102,7 @@ export function ReportList({ sessionId, reports }: { sessionId: string; reports:
                   {r.audienceScores && (
                     <div className="flex gap-1.5">
                       {AUDIENCES.map((a) => (
-                        <span
-                          key={a.key}
-                          title={`${a.label}: ${r.audienceScores?.[a.key]?.score ?? 'not measured'}`}
-                          className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1.5 text-[11px] font-heading font-bold text-text-inverse ${AUD_BG[a.key]}`}
-                        >
-                          {r.audienceScores?.[a.key]?.score ?? '—'}
-                        </span>
+                        <AudienceScoreChip key={a.key} audience={a.key} score={r.audienceScores?.[a.key]?.score ?? null} />
                       ))}
                     </div>
                   )}

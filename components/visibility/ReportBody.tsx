@@ -1,6 +1,7 @@
 import { AUDIENCES } from '@/lib/visibility/audiences'
 import type { VisibilityNarrative, VisibilityResult } from '@/lib/visibility/types'
 import { AudienceArc } from './AudienceArc'
+import { AudienceBadge, AudienceScoreChip } from './AudienceBadge'
 import { AudienceSection } from './AudienceSection'
 import type { TrendPoint } from '@/lib/visibility/trend'
 import { TrendTable } from './TrendTable'
@@ -31,12 +32,13 @@ export function ReportBody({
           <p className="mt-2 whitespace-pre-line text-base font-body leading-relaxed text-text-primary">{narrative.overview}</p>
           <ul className="mt-5 space-y-1.5">
             {AUDIENCES.map((a) => (
-              <li key={a.key} className="flex items-baseline justify-between gap-4 text-sm font-body">
-                <span className="text-text-primary">
-                  <span className="font-heading font-semibold">{a.n}. {a.label}</span>{' '}
+              <li key={a.key} className="flex items-center gap-3 text-sm font-body">
+                <AudienceBadge audience={a.key} size="sm" />
+                <span className="min-w-0 flex-1 text-text-primary">
+                  <span className="font-heading font-semibold">{a.label}</span>{' '}
                   <span className="text-text-secondary">— {a.question}</span>
                 </span>
-                <span className="font-heading font-bold text-brand-navy">{result.audienceScores[a.key]?.score ?? '—'}</span>
+                <AudienceScoreChip audience={a.key} score={result.audienceScores[a.key]?.score ?? null} />
               </li>
             ))}
           </ul>

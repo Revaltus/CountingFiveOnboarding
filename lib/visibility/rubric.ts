@@ -12,7 +12,7 @@ import type { SessionSchema } from '@/types/session-schema'
 import { findPageMentioning, pagesOfKind, type IndexedPage } from './site-index'
 import type { AudienceKey, CheckResult, CheckStatus, GbpEvidence, ProbeResult, RankResult } from './types'
 
-export const RUBRIC_VERSION = '2026.11.1'
+export const RUBRIC_VERSION = '2026.11.2'
 
 export interface AiJudgment {
   checkId: string
@@ -121,6 +121,18 @@ const hostOf = (url: string): string | null => {
 }
 
 const RESOURCE_URL = /blog|resource|insight|article|news|post/i
+
+const DEAL_INTENT = /succession|merg|acqui|\bm&a\b|investment|investor|sell (the|our) (firm|practice)|practice (sale|transition)|join forces|tuck-?in/i
+
+// The succession check only applies to firms that have said they're open to a
+// deal — in their growth goals or the content they asked us to feature.
+function openToDeals(schema: SessionSchema): boolean {
+  const b = schema.business
+  const text = [b?.growthGoals, b?.firmHistory, ...(Array.isArray(b?.contentEmphasis) ? b.contentEmphasis : [])]
+    .filter((x): x is string => typeof x === 'string')
+    .join(' ')
+  return DEAL_INTENT.test(text)
+}
 
 function prospects(ctx: RubricContext): CheckResult[] {
   const a: AudienceKey = 'prospects'
@@ -238,7 +250,11 @@ function talent(ctx: RubricContext): CheckResult[] {
     make('t.partners', a, 'Partners, alliances and affiliations', 1, 'site',
       partners ? res('pass', 'Partner or affiliation content found', partners.url) : res('fail', 'No partner, alliance or affiliation content found')),
     make('t.succession', a, 'Open to succession, mergers or investment', 1, 'site',
-      succession ? res('pass', 'Succession / M&A content found', succession.url) : res('fail', 'No succession, merger or investment content found')),
+      !openToDeals(ctx.schema)
+        ? res('na', 'Not among the firm\'s stated goals')
+        : succession
+          ? res('pass', 'Succession / M&A content found', succession.url)
+          : res('fail', 'The firm is open to succession, mergers or investment, but the site doesn\'t say so')),
     make('t.story', a, AI_CHECKS[2].label, 2, 'ai', aiCheck(ctx, 't.story')),
   ]
 }

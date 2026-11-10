@@ -1,5 +1,7 @@
 import { AUDIENCES } from '@/lib/visibility/audiences'
 import type { TrendPoint } from '@/lib/visibility/trend'
+import { AudienceBadge } from './AudienceBadge'
+import { AUD_BG_LIGHT } from './audience-styles'
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -23,8 +25,13 @@ export function TrendTable({ points }: { points: TrendPoint[] }) {
             {points.map((p) => <td key={p.date} className="px-4 py-2 text-right font-semibold text-brand-navy">{p.overall ?? '—'}</td>)}
           </tr>
           {AUDIENCES.map((a) => (
-            <tr key={a.key}>
-              <td className="px-4 py-2 text-text-primary">{a.n}. {a.label}</td>
+            <tr key={a.key} className={AUD_BG_LIGHT[a.key]}>
+              <td className="px-4 py-2 text-text-primary">
+                <span className="flex items-center gap-2">
+                  <AudienceBadge audience={a.key} size="sm" />
+                  {a.label}
+                </span>
+              </td>
               {points.map((p) => <td key={p.date} className="px-4 py-2 text-right text-text-primary">{p.audiences[a.key]?.score ?? '—'}</td>)}
             </tr>
           ))}

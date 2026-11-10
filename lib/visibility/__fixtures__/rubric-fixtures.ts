@@ -123,6 +123,7 @@ export function schemaFixture(): SessionSchema {
     business: {
       name: 'Firm CPA',
       affiliations: ['AICPA'],
+      growthGoals: 'Grow advisory work; open to a merger or succession partner within five years.',
       targetKeywords: ['dental cpa', 'tax planning'],
       serviceAreas: [{ city: 'Austin', state: 'TX', primary: true }],
     },

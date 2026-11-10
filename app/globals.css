@@ -38,13 +38,24 @@
   --color-warning-strong: #92400E; /* amber-800 — readable warning TEXT (AA) */
   --color-info: #231f20;
 
-  /* Visibility Report audiences (Revaltus five-audience deck). Mirrored for the
-     PDF in lib/pdf/visibility/palette.ts — keep both in sync. */
-  --color-aud-prospects: #F2BE45;
-  --color-aud-clients: #74AFC8;
-  --color-aud-talent: #EE9444;
-  --color-aud-search: #9FA878;
-  --color-aud-ai: #968592;
+  /* Visibility Report audiences — sampled from the Revaltus PASBA deck's
+     five-band arc (base = outer ring, mid, light = inner ring). Mirrored for
+     the PDF in lib/pdf/visibility/palette.ts — keep both in sync. */
+  --color-aud-prospects: #F5C045;
+  --color-aud-prospects-mid: #F8DB82;
+  --color-aud-prospects-light: #FBE9B1;
+  --color-aud-clients: #74B1C8;
+  --color-aud-clients-mid: #9ECADA;
+  --color-aud-clients-light: #C6DFEA;
+  --color-aud-talent: #EF9544;
+  --color-aud-talent-mid: #F4BE85;
+  --color-aud-talent-light: #FBE5C8;
+  --color-aud-search: #9FA876;
+  --color-aud-search-mid: #CACEAB;
+  --color-aud-search-light: #ECEDDE;
+  --color-aud-ai: #948492;
+  --color-aud-ai-mid: #B0A3AE;
+  --color-aud-ai-light: #CEC5CB;
 
   /* Font families are defined in @theme inline below using CSS var() references */
 

@@ -73,6 +73,18 @@ describe('evaluateRubric', () => {
     expect(byId(evaluateRubric(ctx)).get('s.ranks')?.status).toBe('partial')
   })
 
+  it('scores succession only for firms open to a deal', () => {
+    const open = goodContext()
+    open.index = open.index.filter((p) => p.path !== '/succession-planning')
+    expect(byId(evaluateRubric(open)).get('t.succession')?.status).toBe('fail')
+
+    const closed = goodContext()
+    closed.schema = { ...closed.schema, business: { ...closed.schema.business!, growthGoals: 'Grow advisory work.' } }
+    const c = byId(evaluateRubric(closed)).get('t.succession')
+    expect(c?.status).toBe('na')
+    expect(c?.detail).toMatch(/stated goals/)
+  })
+
   it('fails the portal check when portals are listed but not linked', () => {
     const ctx = goodContext()
     ctx.index = ctx.index.map((p) => ({ ...p, html: p.html.replace('sharefile', 'nothing') }))

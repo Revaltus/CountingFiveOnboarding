@@ -11,19 +11,22 @@ const s = StyleSheet.create({
   overallRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   overallScore: { fontSize: 40, fontWeight: 'bold', color: PDF_COLORS.ink, marginRight: 12 },
   overallLabel: { fontSize: 11, color: PDF_COLORS.muted },
-  audRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottom: `1pt solid ${PDF_COLORS.rule}` },
+  audRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, marginBottom: 4, borderRadius: 4, borderLeftWidth: 4 },
   badge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   badgeText: { fontSize: 10, color: PDF_COLORS.page, fontWeight: 'bold' },
   audName: { flexGrow: 1 },
   audLabel: { fontSize: 12, fontWeight: 'bold', color: PDF_COLORS.ink },
   audQuestion: { fontSize: 9, color: PDF_COLORS.muted },
   audScore: { fontSize: 14, fontWeight: 'bold', color: PDF_COLORS.ink },
-  h2: { fontSize: 18, fontWeight: 'bold', color: PDF_COLORS.ink, marginBottom: 4 },
-  question: { fontSize: 11, color: PDF_COLORS.muted, marginBottom: 14 },
+  band: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 4, borderLeftWidth: 6, marginBottom: 14 },
+  h2: { fontSize: 18, fontWeight: 'bold', color: PDF_COLORS.ink, marginBottom: 2 },
+  question: { fontSize: 11, color: PDF_COLORS.body },
+  focus: { fontSize: 9, color: PDF_COLORS.muted, marginTop: 2 },
+  bandScore: { fontSize: 22, fontWeight: 'bold', color: PDF_COLORS.ink, marginLeft: 'auto' },
   h3: { fontSize: 11, fontWeight: 'bold', color: PDF_COLORS.teal, marginTop: 12, marginBottom: 6 },
   para: { lineHeight: 1.5 },
   bullet: { flexDirection: 'row', marginBottom: 4 },
-  bulletDot: { width: 12 },
+  bulletDot: { width: 14, fontSize: 14, fontWeight: 'bold', marginTop: -3 },
   bulletText: { flex: 1, lineHeight: 1.4 },
   checkRow: { flexDirection: 'row', paddingVertical: 3, borderBottom: `0.5pt solid ${PDF_COLORS.rule}` },
   checkStatus: { width: 64, fontSize: 9, fontWeight: 'bold' },
@@ -37,12 +40,12 @@ const STATUS_COLOR: Record<CheckStatus, string> = { pass: PDF_COLORS.teal, parti
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
-function Bullets({ items }: { items: string[] }) {
+function Bullets({ items, color }: { items: string[]; color: string }) {
   return (
     <>
       {items.map((t, i) => (
         <View key={i} style={s.bullet}>
-          <Text style={s.bulletDot}>•</Text>
+          <Text style={[s.bulletDot, { color }]}>•</Text>
           <Text style={s.bulletText}>{t}</Text>
         </View>
       ))}
@@ -70,8 +73,8 @@ export function VisibilityPdf({ result, narrative, firmName }: { result: Visibil
         {AUDIENCES.map((a) => {
           const sc = result.audienceScores[a.key]
           return (
-            <View key={a.key} style={s.audRow}>
-              <View style={[s.badge, { backgroundColor: PDF_AUDIENCE_COLORS[a.key] }]}>
+            <View key={a.key} style={[s.audRow, { backgroundColor: PDF_AUDIENCE_COLORS[a.key].light, borderLeftColor: PDF_AUDIENCE_COLORS[a.key].base }]}>
+              <View style={[s.badge, { backgroundColor: PDF_AUDIENCE_COLORS[a.key].base }]}>
                 <Text style={s.badgeText}>{a.n}</Text>
               </View>
               <View style={s.audName}>
@@ -89,33 +92,40 @@ export function VisibilityPdf({ result, narrative, firmName }: { result: Visibil
       {AUDIENCES.map((a) => {
         const sc = result.audienceScores[a.key]
         const sec = narrative.audiences[a.key]
-        const checks = result.checks.filter((c) => c.audience === a.key)
+        const checks = result.checks.filter((x) => x.audience === a.key)
+        const c = PDF_AUDIENCE_COLORS[a.key]
         return (
           <Page key={a.key} size="LETTER" style={s.page}>
-            <View style={[s.badge, { backgroundColor: PDF_AUDIENCE_COLORS[a.key], marginBottom: 8 }]}>
-              <Text style={s.badgeText}>{a.n}</Text>
+            <View style={[s.band, { backgroundColor: c.light, borderLeftColor: c.base }]}>
+              <View style={[s.badge, { backgroundColor: c.base }]}>
+                <Text style={s.badgeText}>{a.n}</Text>
+              </View>
+              <View>
+                <Text style={s.h2}>{a.label}</Text>
+                <Text style={s.question}>{a.question}</Text>
+                <Text style={s.focus}>Content focus: {a.focus}</Text>
+              </View>
+              <Text style={s.bandScore}>{sc.score ?? '—'}{sc.grade ? ` ${sc.grade}` : ''}</Text>
             </View>
-            <Text style={s.h2}>{a.label} · {sc.score ?? '—'}{sc.grade ? ` (${sc.grade})` : ''}</Text>
-            <Text style={s.question}>{a.question}</Text>
             {sec.wins.length > 0 && (
               <>
-                <Text style={s.h3}>What&apos;s working</Text>
-                <Bullets items={sec.wins} />
+                <Text style={[s.h3, { borderBottom: `2pt solid ${c.base}`, paddingBottom: 3 }]}>What&apos;s working</Text>
+                <Bullets items={sec.wins} color={c.base} />
               </>
             )}
             {sec.opportunities.length > 0 && (
               <>
-                <Text style={s.h3}>Next opportunities</Text>
-                <Bullets items={sec.opportunities} />
+                <Text style={[s.h3, { borderBottom: `2pt solid ${c.base}`, paddingBottom: 3 }]}>Next opportunities</Text>
+                <Bullets items={sec.opportunities} color={c.base} />
               </>
             )}
-            <Text style={s.h3}>What we checked</Text>
-            {checks.map((c) => (
-              <View key={c.id} style={s.checkRow} wrap={false}>
-                <Text style={[s.checkStatus, { color: STATUS_COLOR[c.status] }]}>{STATUS_LABEL[c.status]}</Text>
+            <Text style={[s.h3, { borderBottom: `2pt solid ${c.base}`, paddingBottom: 3 }]}>What we checked</Text>
+            {checks.map((ck) => (
+              <View key={ck.id} style={s.checkRow} wrap={false}>
+                <Text style={[s.checkStatus, { color: STATUS_COLOR[ck.status] }]}>{STATUS_LABEL[ck.status]}</Text>
                 <View style={s.checkLabel}>
-                  <Text>{c.label}</Text>
-                  <Text style={s.checkDetail}>{c.detail}</Text>
+                  <Text>{ck.label}</Text>
+                  <Text style={s.checkDetail}>{ck.detail}</Text>
                 </View>
               </View>
             ))}

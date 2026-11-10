@@ -288,7 +288,7 @@ Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a po
 - **Rubric versioning:** changing a check's id, weight or status rule MUST bump `RUBRIC_VERSION`. Trends (`lib/visibility/trend.ts`) compare only published reports with an equal version.
 - **Lifecycle:** queued → running (atomic claim in `/run`, `after()` worker) → draft → published (PDF rendered to `pdfs/{sessionId}/visibility-{id}.pdf`, new `share_token`). Only drafts are editable; unpublish clears the token. `sweep-stuck-jobs` errors runs stuck >15 min.
 - **URL:** `sessions.live_site_url` (migration 087) is the operator-confirmed rebuilt-site URL; `website_url` stays the old site. The run dialog pre-fills live URL → staging preview → website URL (`report-url.ts`).
-- **Colours:** the `--color-aud-*` tokens in `app/globals.css` are mirrored for react-pdf in `lib/pdf/visibility/palette.ts`. Keep both in sync.
+- **Colours:** every per-audience element is colour-coded with the deck's sampled colours: `--color-aud-<key>` plus `-mid` and `-light` in `app/globals.css`, mirrored for react-pdf in `lib/pdf/visibility/palette.ts`. Keep both in sync. White numerals go only on base fills; readable text is navy on the light tint, never white on the yellow. Audience order, questions and content-focus copy live in `lib/visibility/audiences.ts`.
 - **Future:** GSC/GA4, scheduled runs, Site Owner view.
 
 ### Design Studio
