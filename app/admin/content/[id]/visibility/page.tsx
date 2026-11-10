@@ -24,7 +24,7 @@ export default async function VisibilityReportsPage({ params }: { params: Promis
   const supabase = createServerClient()
   const [{ data: session }, { data: job }, { data: rows }] = await Promise.all([
     supabase.from('sessions').select('id, website_url, live_site_url, schema_data').eq('id', id).maybeSingle(),
-    supabase.from('content_jobs').select('id, github_repo').eq('session_id', id).maybeSingle(),
+    supabase.from('content_jobs').select('id, github_repo, phase').eq('session_id', id).maybeSingle(),
     supabase
       .from('visibility_reports')
       .select('id, url, status, status_detail, error, overall_score, overall_grade, audience_scores, rubric_version, created_at, published_at')
@@ -35,6 +35,8 @@ export default async function VisibilityReportsPage({ params }: { params: Promis
   if (!session) notFound()
 
   const firmName = (session.schema_data as SessionSchema | null)?.business?.name?.trim() || session.website_url
+  // Content-ready clients (phase 6 + repo) live in the editor, so go back there.
+  const backToEditor = !!job?.github_repo && (job?.phase ?? 0) >= 6
   const suggested = await resolveDefaultReportUrl({
     liveSiteUrl: session.live_site_url,
     websiteUrl: session.website_url,
@@ -57,8 +59,8 @@ export default async function VisibilityReportsPage({ params }: { params: Promis
   return (
     <main className="p-8 max-w-[1100px] mx-auto">
       <div className="mb-8">
-        <Link href={`/admin/content/${id}`} className="text-sm font-body text-text-muted hover:text-brand-cyan transition-colors">
-          &larr; Back to content workflow
+        <Link href={backToEditor ? `/admin/content/${id}/edit` : `/admin/content/${id}`} className="text-sm font-body text-text-muted hover:text-brand-cyan transition-colors">
+          &larr; Back to {backToEditor ? 'content editor' : 'content workflow'}
         </Link>
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
           <div>

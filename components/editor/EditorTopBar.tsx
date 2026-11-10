@@ -220,6 +220,18 @@ function OverflowMenu({
           {!isOwner && (
             <>
               <div className="border-t border-border-default my-1" />
+              {/* Admins + managers, matching the visibility-reports route gate. */}
+              {canPublishLive && (
+              <Link
+                href={`/admin/content/${sessionId}/visibility`}
+                role="menuitem"
+                className={`${itemClass} text-text-secondary hover:text-brand-cyan`}
+                title="Score this site for the five audiences (prospective clients, existing clients, future talent & partners, Google search, AI discovery) and share a report with the client."
+                onClick={() => setOpen(false)}
+              >
+                Visibility reports →
+              </Link>
+              )}
               <Link
                 href={`/admin/content/${sessionId}/plans`}
                 role="menuitem"
