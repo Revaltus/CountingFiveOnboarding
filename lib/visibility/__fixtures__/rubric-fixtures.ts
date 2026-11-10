@@ -174,9 +174,9 @@ export function goodContext(): RubricContext {
     ],
     gbp: { rating: 4.8, reviewCount: 60, mapsUri: 'https://maps.google.com/x' },
     probe: [
-      { question: 'q1', mentioned: true, snippet: '', citedUrl: null },
-      { question: 'q2', mentioned: true, snippet: '', citedUrl: null },
-      { question: 'q3', mentioned: false, snippet: '', citedUrl: null },
+      { question: 'q1', kind: 'discovery', mentioned: true, snippet: '', citedUrl: null },
+      { question: 'q2', kind: 'discovery', mentioned: true, snippet: '', citedUrl: null },
+      { question: 'q3', kind: 'understanding', mentioned: false, snippet: '', citedUrl: null },
     ],
     ai: [
       { checkId: 'p.answers_need', status: 'pass', detail: 'Clear', evidenceUrl: 'https://firm.com/industries/dental-practices' },

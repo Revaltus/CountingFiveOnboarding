@@ -30,6 +30,9 @@ export interface RankResult {
 
 export interface ProbeResult {
   question: string
+  // discovery = a buyer question where the firm should surface; understanding =
+  // "what is <firm> known for", counted only when the answer cites the firm's site.
+  kind: 'discovery' | 'understanding'
   mentioned: boolean
   snippet: string
   citedUrl: string | null
