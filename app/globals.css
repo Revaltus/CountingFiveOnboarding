@@ -38,6 +38,14 @@
   --color-warning-strong: #92400E; /* amber-800 — readable warning TEXT (AA) */
   --color-info: #231f20;
 
+  /* Visibility Report audiences (Revaltus five-audience deck). Mirrored for the
+     PDF in lib/pdf/visibility/palette.ts — keep both in sync. */
+  --color-aud-prospects: #F2BE45;
+  --color-aud-clients: #74AFC8;
+  --color-aud-talent: #EE9444;
+  --color-aud-search: #9FA878;
+  --color-aud-ai: #968592;
+
   /* Font families are defined in @theme inline below using CSS var() references */
 
   /* Border radii */

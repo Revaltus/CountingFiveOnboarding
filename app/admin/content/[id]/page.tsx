@@ -188,6 +188,21 @@ export default async function ContentWorkflowPage({
 
       <div className="mb-8 flex items-center justify-between border border-border-default bg-surface-card shadow-subtle rounded-xl p-4">
         <div>
+          <h2 className="text-sm font-heading font-semibold text-brand-navy">Visibility reports</h2>
+          <p className="text-xs font-body text-text-muted mt-0.5">
+            Score the rebuilt site for each of the five audiences and share a report with the client.
+          </p>
+        </div>
+        <Link
+          href={`/admin/content/${session.id}/visibility`}
+          className="border border-brand-cyan text-brand-cyan font-heading font-semibold text-xs px-3.5 py-1.5 rounded-pill transition-colors hover:bg-brand-cyan/10"
+        >
+          Open reports
+        </Link>
+      </div>
+
+      <div className="mb-8 flex items-center justify-between border border-border-default bg-surface-card shadow-subtle rounded-xl p-4">
+        <div>
           <h2 className="text-sm font-heading font-semibold text-brand-navy">Pricing calculator</h2>
           <p className="text-xs font-body text-text-muted mt-0.5">
             Configure the interactive pricing estimate published to this client&rsquo;s site.
