@@ -271,6 +271,20 @@ This does NOT apply to the **background** impact reviews (`reviewContentForMbpIm
   In `on` mode a retriable `error` (attempts below the cap) still holds phase 6.
 - **Apply/Dismiss.** The Apply/Dismiss route calls the `qa_apply_page_update` RPC (migration 084), which does a server-side md5+rev CAS — PostgREST can't filter on long text in the URL.
 
+### Visibility Report
+Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a post-launch, client-facing report that scores a rebuilt site for the five audiences (prospective clients, existing clients, future talent & partners, Google search, AI discovery).
+- **Gate:** every `/api/visibility-reports/**` route and both admin pages use `requireOnboardingSessionAccess` (admins + managers assigned to the client). Editors and Site Owners are excluded. The public `/visibility/[token]` page and `/pdf?token=` look up by `share_token` only and 404 unless the report is `published`.
+- **Engine:** `lib/visibility/run.ts` reuses `runAudit({ skipIntelligence: true })` for crawl + scores, then:
+  - the pure rubric (`rubric.ts`);
+  - one `generateMbpJson` review (AI checks + narrative, cached static prefix);
+  - Serper ranks, Places GBP and a web-search AI probe, which run **only on a live domain** (`isLiveHost`; `*.vercel.app` is staging).
+  - Every off-site/AI step is non-fatal and lands in `result.unavailable`.
+- **Rubric versioning:** changing a check's id, weight or status rule MUST bump `RUBRIC_VERSION`. Trends (`lib/visibility/trend.ts`) compare only published reports with an equal version.
+- **Lifecycle:** queued → running (atomic claim in `/run`, `after()` worker) → draft → published (PDF rendered to `pdfs/{sessionId}/visibility-{id}.pdf`, new `share_token`). Only drafts are editable; unpublish clears the token. `sweep-stuck-jobs` errors runs stuck >15 min.
+- **URL:** `sessions.live_site_url` (migration 087) is the operator-confirmed rebuilt-site URL; `website_url` stays the old site. The run dialog pre-fills live URL → staging preview → website URL (`report-url.ts`).
+- **Colours:** the `--color-aud-*` tokens in `app/globals.css` are mirrored for react-pdf in `lib/pdf/visibility/palette.ts`. Keep both in sync.
+- **Future:** GSC/GA4, scheduled runs, Site Owner view.
+
 ### Design Studio
 Spec: `docs/superpowers/specs/2026-09-24-design-studio-design.md`. It replaced the template's retired `export-brief` → Claude Design workflow (removed 2026-09-26).
 - Every `app/api/edit/[id]/design/**` route calls `requireDesignAdmin(id)` first (admin-only); the run step route alternatively takes the fail-closed `CRON_SECRET` bearer.
