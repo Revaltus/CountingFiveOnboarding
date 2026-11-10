@@ -37,6 +37,7 @@ export type TokenStage =
   | 'design_concept'
   | 'design_critique'
   | 'design_chat'
+  | 'visibility'
 
 // Attribution context threaded into shared AI helpers (e.g. generateMbpJson)
 // so each call records who/what it was for. Omitted fields record as null.

@@ -1902,6 +1902,7 @@ export type Database = {
           gap_list: Json
           id: string
           last_activity_at: string
+          live_site_url: string | null
           mbp_content: string | null
           notes_extracted_at: string | null
           pdf_url: string | null
@@ -1927,6 +1928,7 @@ export type Database = {
           gap_list?: Json
           id?: string
           last_activity_at?: string
+          live_site_url?: string | null
           mbp_content?: string | null
           notes_extracted_at?: string | null
           pdf_url?: string | null
@@ -1952,6 +1954,7 @@ export type Database = {
           gap_list?: Json
           id?: string
           last_activity_at?: string
+          live_site_url?: string | null
           mbp_content?: string | null
           notes_extracted_at?: string | null
           pdf_url?: string | null
@@ -2160,6 +2163,109 @@ export type Database = {
           },
           {
             foreignKeyName: "token_usage_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visibility_reports: {
+        Row: {
+          attempts: number
+          audience_scores: Json | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          domain: string
+          error: string | null
+          id: string
+          is_live_domain: boolean
+          narrative: Json | null
+          overall_grade: string | null
+          overall_score: number | null
+          pdf_path: string | null
+          published_at: string | null
+          published_by: string | null
+          result: Json | null
+          rubric_version: string | null
+          session_id: string
+          share_token: string | null
+          started_at: string | null
+          status: string
+          status_detail: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          attempts?: number
+          audience_scores?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          domain: string
+          error?: string | null
+          id?: string
+          is_live_domain?: boolean
+          narrative?: Json | null
+          overall_grade?: string | null
+          overall_score?: number | null
+          pdf_path?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          result?: Json | null
+          rubric_version?: string | null
+          session_id: string
+          share_token?: string | null
+          started_at?: string | null
+          status?: string
+          status_detail?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          attempts?: number
+          audience_scores?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          domain?: string
+          error?: string | null
+          id?: string
+          is_live_domain?: boolean
+          narrative?: Json | null
+          overall_grade?: string | null
+          overall_score?: number | null
+          pdf_path?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          result?: Json | null
+          rubric_version?: string | null
+          session_id?: string
+          share_token?: string | null
+          started_at?: string | null
+          status?: string
+          status_detail?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visibility_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visibility_reports_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visibility_reports_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "sessions"
