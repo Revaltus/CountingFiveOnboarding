@@ -79,7 +79,11 @@ const significantWords = (phrase: string): string[] =>
 // A page "mentions" a phrase when every significant (4+ char) word of it is
 // present. Heading/path matches win over body-text matches, so the dedicated
 // page is the evidence rather than the homepage that lists everything.
-export function findPageMentioning(index: IndexedPage[], phrase: string): IndexedPage | null {
+export function findPageMentioning(
+  index: IndexedPage[],
+  phrase: string,
+  opts: { headingOnly?: boolean } = {},
+): IndexedPage | null {
   const words = significantWords(phrase)
   if (words.length === 0) {
     const bare = phrase.trim().toLowerCase()
@@ -87,9 +91,7 @@ export function findPageMentioning(index: IndexedPage[], phrase: string): Indexe
     words.push(bare)
   }
   const has = (hay: string) => words.every((w) => hay.includes(w))
-  return (
-    index.find((p) => has(signature(p).replace(/[-_/]/g, ' '))) ??
-    index.find((p) => has(p.text.toLowerCase())) ??
-    null
-  )
+  const dedicated = index.find((p) => has(signature(p).replace(/[-_/]/g, ' ')))
+  if (dedicated || opts.headingOnly) return dedicated ?? null
+  return index.find((p) => has(p.text.toLowerCase())) ?? null
 }

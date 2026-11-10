@@ -74,6 +74,11 @@ describe('findPageMentioning', () => {
     expect(findPageMentioning(only, 'dental practices')?.path).toBe('/')
   })
 
+  it('headingOnly ignores body-text mentions', () => {
+    const only = index(page('https://a.com/', 'Home', '', 'We serve dental practices and more.'))
+    expect(findPageMentioning(only, 'dental practices', { headingOnly: true })).toBeNull()
+  })
+
   it('returns null when absent or phrase is empty', () => {
     expect(findPageMentioning(idx, 'Construction')).toBeNull()
     expect(findPageMentioning(idx, '  ')).toBeNull()
