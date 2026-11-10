@@ -715,4 +715,7 @@ export interface RunAuditInput {
   // crawl and the intelligence stage split the function's budget instead of each
   // assuming it owns the full maxDuration. Set by the worker at job entry.
   deadline?: number
+  // Skip the prospect-research stage (competitors, social, narrative). Used by
+  // the post-launch Visibility Report, which only needs crawl + scores.
+  skipIntelligence?: boolean
 }

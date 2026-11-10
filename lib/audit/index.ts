@@ -176,6 +176,8 @@ export async function runAudit(input: RunAuditInput): Promise<AuditResult> {
     },
   }
 
+  if (input.skipIntelligence) return result
+
   // ── Intelligence (AI + off-site research) ───────────────────────────────────
   // Best-effort and non-fatal (mirrors the WHOIS rule): a failure here leaves
   // `intelligence` undefined and the audit still completes. Runs on the
