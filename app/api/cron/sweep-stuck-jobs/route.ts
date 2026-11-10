@@ -262,6 +262,20 @@ export async function GET(req: Request) {
     console.warn(`[sweep-stuck-jobs] article-imports reset to error=${articleImportsSwept}`)
   }
 
+  // visibility_reports stuck in 'running' (the after() worker died mid-run).
+  // Reset to 'error' so the operator can re-run it from the client's
+  // Visibility Reports page; the run route re-claims 'error' rows.
+  const { data: visibilityStuck } = await supabase
+    .from('visibility_reports')
+    .update({ status: 'error', status_detail: null, error: 'Report timed out (swept by cron)', updated_at: new Date().toISOString() })
+    .eq('status', 'running')
+    .lt('started_at', cutoff)
+    .select('id')
+  const visibilityReportsSwept = visibilityStuck?.length ?? 0
+  if (visibilityReportsSwept) {
+    console.warn(`[sweep-stuck-jobs] visibility-reports reset to error=${visibilityReportsSwept}`)
+  }
+
   // Prune rate-limiter events older than 24h (largest window is 1h; 24h keeps
   // the table tiny without racing any active window).
   await supabase
@@ -700,6 +714,6 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ researchSwept, pagesSwept, ideasSwept, socialsSwept, oneoffsSwept, auditsSwept, batchTargetsSwept, newPagesSwept, librarySelectionsSwept, articleImportsSwept, whoisRetried, generationResumed, outlinesResumed, batchesResumed, auditBatchesResumed, librarySelectionsResumed, articleImportsResumed,
+  return NextResponse.json({ researchSwept, visibilityReportsSwept, pagesSwept, ideasSwept, socialsSwept, oneoffsSwept, auditsSwept, batchTargetsSwept, newPagesSwept, librarySelectionsSwept, articleImportsSwept, whoisRetried, generationResumed, outlinesResumed, batchesResumed, auditBatchesResumed, librarySelectionsResumed, articleImportsResumed,
     researchResumed, qaSwept, qaRetriggered, qaJobsFinalized, qaApprovedSkipped, qaQueuedTimedOut, designInputsSwept: designSwept.inputs, designRunsSwept: designSwept.runs, designConceptsSwept: designSwept.concepts, designRendersRemoved: designOrphans.renders, designAttachmentsRemoved: designOrphans.attachments, designRunRendersRemoved: designOrphans.runRenders, cutoff })
 }

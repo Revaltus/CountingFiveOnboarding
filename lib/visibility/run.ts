@@ -94,7 +94,14 @@ export async function runVisibilityReport(
 
   await report('reviewing', 'Reviewing the site for each audience…')
   const [review, probe] = await Promise.all([
-    settle(runAiReview({ firmName: input.firmName, schema: input.schema, index, checks: deterministic, ctx: input.ctx })),
+    settle(runAiReview({
+      firmName: input.firmName,
+      schema: input.schema,
+      index,
+      checks: deterministic,
+      auditHints: (audit.recommendations ?? []).map((r) => `${r.title} — ${r.detail}`),
+      ctx: input.ctx,
+    })),
     input.isLiveDomain
       ? settle(runAiProbe({ schema: input.schema, firmName: input.firmName, domain, ctx: input.ctx }))
       : Promise.resolve(null),

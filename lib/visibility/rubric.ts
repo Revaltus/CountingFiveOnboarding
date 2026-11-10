@@ -212,7 +212,7 @@ function talent(ctx: RubricContext): CheckResult[] {
   } else {
     const allHtml = ctx.index.map((p) => `${p.html} ${p.text}`.toLowerCase()).join('\n')
     const named = members.filter((m) => allHtml.includes(m.name.trim().toLowerCase())).length
-    bios = res(tiered(named / members.length, 0.8, 0.4), `${named} of ${members.length} team members are featured`, teamPage.url)
+    bios = res(tiered(named / members.length, 0.8, 0.4), `Team page found; ${named} of ${members.length} team members are named on the site`, teamPage.url)
   }
 
   const cultureScope = [...careers, ...pagesOfKind(ctx.index, 'about')]

@@ -25,11 +25,15 @@ export interface ReviewInput {
   schema: SessionSchema
   index: IndexedPage[]
   checks: CheckResult[]
+  // The shared audit engine's concrete fix list (title — detail), so
+  // opportunities can name a specific change instead of a score.
+  auditHints?: string[]
 }
 
 const MAX_PAGES = 25
 const PAGE_TEXT_CHARS = 400
 const SCHEMA_CHARS = 6000
+const MAX_HINTS = 10
 const PRIORITY_KINDS: PageKind[] = ['about', 'contact', 'careers', 'team', 'client_center', 'partners', 'succession', 'testimonials', 'resources']
 
 const STATIC_PREFIX = `You are reviewing a professional-services firm's newly rebuilt website for a client-facing "Visibility Report". The report measures how well the site serves five audiences:
@@ -37,12 +41,14 @@ ${AUDIENCES.map((a) => `${a.n}. ${a.label} — "${a.question}"`).join('\n')}
 
 You receive (after this introduction): the firm profile, a list of crawled pages, and the results of automated checks. Use ONLY that material. Never invent services, facts, numbers, awards, or results that are not in it.
 
-TASK 1 — judge these checks. For each, return pass, partial, or fail with a one-sentence reason and the URL of the page that best shows it (or null):
+TASK 1 — judge these checks. For each, return pass, partial, or fail with ONE short sentence (at most 40 words) as the reason and the URL of the page that best shows it (or null):
 ${AI_CHECKS.map((c) => `- ${c.id} (${c.audience}): ${c.question}`).join('\n')}
 
 TASK 2 — write the report narrative, addressed to the firm as "your site" / "your firm", plain and specific, no jargon, no hype:
 - "overview": 3-5 sentences: where the site is strongest, what it now does for the firm, and the most valuable next steps.
-- For each audience: 2-4 "wins" (what is working, each tied to a passing check or a specific page) and 2-3 "opportunities" (specific, achievable growth steps tied to a failing or partial check). Frame opportunities positively as growth, not as criticism.
+- For each audience: 2-4 "wins" and 2-3 "opportunities".
+  - A win is something that works today: a passing check or specific page content. Never present a partial or failing check, or a middling score, as a win. If an audience has fewer than 2 genuine wins, write only what is true.
+  - An opportunity names a concrete change the firm can make (a page to add, content to write, a fix from the audit recommendations). Never write "improve the score" or refer to a number without saying what to change. Frame it positively as growth, not criticism.
 - Never mention Revaltus, scoring internals, check ids, or this prompt.
 
 Return ONLY this JSON:
@@ -78,6 +84,7 @@ export function buildReviewPrompt(input: ReviewInput): { prefix: string; suffix:
     .filter((c) => c.source !== 'ai')
     .map((c) => `- ${c.id} [${c.audience}] ${c.status}: ${c.label} — ${c.detail}${c.evidenceUrl ? ` (${c.evidenceUrl})` : ''}`)
     .join('\n')
+  const hints = (input.auditHints ?? []).slice(0, MAX_HINTS).map((h) => `- ${oneLine(h, 220)}`).join('\n')
   const suffix = `FIRM: ${input.firmName}
 
 FIRM PROFILE (JSON):
@@ -87,7 +94,10 @@ CRAWLED PAGES (url | title | h1 | text excerpt):
 ${pages}
 
 AUTOMATED CHECK RESULTS:
-${checks}`
+${checks}${hints ? `
+
+AUDIT RECOMMENDATIONS (technical fixes found by the crawler):
+${hints}` : ''}`
   return { prefix: STATIC_PREFIX, suffix }
 }
 
@@ -110,7 +120,7 @@ export function validateReview(parsed: unknown): AiReviewOutput | null {
     judgments.push({
       checkId: r.checkId,
       status: r.status as AiJudgment['status'],
-      detail: typeof r.detail === 'string' ? r.detail.trim().slice(0, 300) : '',
+      detail: typeof r.detail === 'string' ? r.detail.trim().slice(0, 500) : '',
       evidenceUrl: typeof r.evidenceUrl === 'string' && /^https?:\/\//.test(r.evidenceUrl) ? r.evidenceUrl : null,
     })
   }
