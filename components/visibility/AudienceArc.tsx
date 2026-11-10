@@ -61,7 +61,7 @@ export function AudienceArc({ scores, overall, className = '' }: { scores: Audie
           </g>
         )
       })}
-      <path d={`M ${CX - R_CORE + 6} ${CY} A ${R_CORE - 6} ${R_CORE - 6} 0 0 1 ${CX + R_CORE - 6} ${CY} Z`} className="fill-brand-navy" />
+      <path d={`M ${CX - R_CORE + 6} ${CY} A ${R_CORE - 6} ${R_CORE - 6} 0 0 1 ${CX + R_CORE - 6} ${CY} Z`} className="fill-aud-core" />
       <text x={CX} y={CY - 30} textAnchor="middle" className="fill-text-inverse font-heading text-[38px] font-bold">
         {overall ?? '—'}
       </text>

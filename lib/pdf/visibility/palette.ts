@@ -10,6 +10,7 @@ export const PDF_COLORS = {
   faint: '#94A3B8',
   rule: '#E2E8F0',
   page: '#ffffff',
+  core: '#1C2743',
 } as const
 
 export const PDF_AUDIENCE_COLORS: Record<AudienceKey, { base: string; mid: string; light: string }> = {

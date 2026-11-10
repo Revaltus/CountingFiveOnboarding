@@ -44,7 +44,10 @@ export function RunReportDialog({
   const [url, setUrl] = useState(suggestedUrl)
   const [isLive, setIsLive] = useState(suggestedIsLive)
   const [liveTouched, setLiveTouched] = useState(false)
-  const [save, setSave] = useState(true)
+  // Saving a staging address as the live URL would be wrong, so this follows
+  // the live-domain box until the operator sets it themselves.
+  const [saveChoice, setSaveChoice] = useState<boolean | null>(null)
+  const save = saveChoice ?? isLive
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -119,7 +122,7 @@ export function RunReportDialog({
         )}
 
         <label className="mt-3 flex items-start gap-2 text-sm font-body text-text-primary">
-          <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="mt-0.5 accent-brand-cyan" />
+          <input type="checkbox" checked={save} onChange={(e) => setSaveChoice(e.target.checked)} className="mt-0.5 accent-brand-cyan" />
           <span>Save as this client&rsquo;s live site URL for future reports</span>
         </label>
 

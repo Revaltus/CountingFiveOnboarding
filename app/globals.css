@@ -56,6 +56,8 @@
   --color-aud-ai: #948492;
   --color-aud-ai-mid: #B0A3AE;
   --color-aud-ai-light: #CEC5CB;
+  /* The deck's navy "YOUR FIRM" core and dark slides. */
+  --color-aud-core: #1C2743;
 
   /* Font families are defined in @theme inline below using CSS var() references */
 

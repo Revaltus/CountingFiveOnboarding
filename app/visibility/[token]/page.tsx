@@ -39,7 +39,7 @@ export default async function PublicVisibilityReportPage({ params }: { params: P
 
   return (
     <main className="min-h-screen bg-surface-page">
-      <header className="bg-brand-navy">
+      <header className="bg-aud-core">
         <div className="mx-auto flex max-w-[1000px] items-center justify-between px-6 py-5">
           <Image src="/logo-white.png" alt="Revaltus" width={140} height={36} className="h-8 w-auto" priority />
           <a

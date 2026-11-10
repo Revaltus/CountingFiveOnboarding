@@ -9,7 +9,7 @@ const s = StyleSheet.create({
   title: { fontSize: 26, fontWeight: 'bold', color: PDF_COLORS.ink, marginBottom: 6 },
   subtitle: { fontSize: 12, color: PDF_COLORS.muted, marginBottom: 28 },
   overallRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  overallScore: { fontSize: 40, fontWeight: 'bold', color: PDF_COLORS.ink, marginRight: 12 },
+  overallScore: { fontSize: 40, fontWeight: 'bold', color: PDF_COLORS.core, marginRight: 12 },
   overallLabel: { fontSize: 11, color: PDF_COLORS.muted },
   audRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, marginBottom: 4, borderRadius: 4, borderLeftWidth: 4 },
   badge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
