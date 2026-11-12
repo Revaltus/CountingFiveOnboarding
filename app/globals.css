@@ -38,26 +38,34 @@
   --color-warning-strong: #92400E; /* amber-800 — readable warning TEXT (AA) */
   --color-info: #231f20;
 
-  /* Visibility Report audiences — sampled from the Revaltus PASBA deck's
-     five-band arc (base = outer ring, mid, light = inner ring). Mirrored for
-     the PDF in lib/pdf/visibility/palette.ts — keep both in sync. */
-  --color-aud-prospects: #F5C045;
-  --color-aud-prospects-mid: #F8DB82;
-  --color-aud-prospects-light: #FBE9B1;
-  --color-aud-clients: #74B1C8;
-  --color-aud-clients-mid: #9ECADA;
-  --color-aud-clients-light: #C6DFEA;
-  --color-aud-talent: #EF9544;
-  --color-aud-talent-mid: #F4BE85;
-  --color-aud-talent-light: #FBE5C8;
-  --color-aud-search: #9FA876;
-  --color-aud-search-mid: #CACEAB;
-  --color-aud-search-light: #ECEDDE;
-  --color-aud-ai: #948492;
-  --color-aud-ai-mid: #B0A3AE;
-  --color-aud-ai-light: #CEC5CB;
-  /* The deck's navy "YOUR FIRM" core and dark slides. */
-  --color-aud-core: #1C2743;
+  /* Visibility Report audiences — sampled from the Revaltus brochure's
+     five-band arc (base = outer ring, mid, light = inner ring; the arc draws
+     each tone as a left→right gradient). -tint is the pale panel/badge
+     background (≈14% of base on white) — the brochure's "light" ring is too
+     strong to sit behind text. Mirrored for the PDF in
+     lib/pdf/visibility/palette.ts — keep both in sync. */
+  --color-aud-prospects: #F3B848;
+  --color-aud-prospects-mid: #F7C770;
+  --color-aud-prospects-light: #F9D188;
+  --color-aud-prospects-tint: #FDF5E5;
+  --color-aud-niche: #529DB1;
+  --color-aud-niche-mid: #83B2C0;
+  --color-aud-niche-light: #9FC2CC;
+  --color-aud-niche-tint: #E7F1F4;
+  --color-aud-talent: #EC9049;
+  --color-aud-talent-mid: #EFA264;
+  --color-aud-talent-light: #F2B177;
+  --color-aud-talent-tint: #FCEFE6;
+  --color-aud-search: #8F9670;
+  --color-aud-search-mid: #9CA17E;
+  --color-aud-search-light: #A7AC8B;
+  --color-aud-search-tint: #EFF0EB;
+  --color-aud-ai: #7C6D6D;
+  --color-aud-ai-mid: #9C8F8E;
+  --color-aud-ai-light: #B3A9A7;
+  --color-aud-ai-tint: #EDEBEB;
+  /* The brochure's dark navy "YOUR FIRM" core. */
+  --color-aud-core: #101B2C;
 
   /* Font families are defined in @theme inline below using CSS var() references */
 

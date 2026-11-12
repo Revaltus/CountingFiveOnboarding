@@ -1,6 +1,6 @@
 import type { AudienceMeta } from '@/lib/visibility/audiences'
 import type { AudienceScore, CheckResult, VisibilityNarrativeSection } from '@/lib/visibility/types'
-import { AUD_BG, AUD_BG_LIGHT, AUD_BORDER, AUD_MARKER } from './audience-styles'
+import { AUD_BG, AUD_BG_TINT, AUD_BORDER, AUD_MARKER } from './audience-styles'
 import { AudienceBadge } from './AudienceBadge'
 import { CheckList } from './CheckList'
 
@@ -20,11 +20,11 @@ export function AudienceSection({
   const listCls = `mt-2 list-disc space-y-1.5 pl-5 text-sm font-body text-text-primary ${AUD_MARKER[meta.key]}`
   return (
     <section className={`overflow-hidden rounded-xl border border-border-default border-l-[6px] ${AUD_BORDER[meta.key]} bg-surface-card shadow-subtle`}>
-      <div className={`flex items-start gap-4 px-6 py-4 ${AUD_BG_LIGHT[meta.key]}`}>
+      <div className={`flex items-start gap-4 px-6 py-4 ${AUD_BG_TINT[meta.key]}`}>
         <AudienceBadge audience={meta.key} size="lg" />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-heading font-bold text-brand-navy">{meta.label}</h2>
-          <p className="text-sm font-body text-text-primary">{meta.question}</p>
+          <p className="text-sm font-body text-text-primary">{meta.summary}</p>
           <p className="mt-0.5 text-xs font-body text-text-secondary">Content focus: {meta.focus}</p>
         </div>
         <div className="text-right">

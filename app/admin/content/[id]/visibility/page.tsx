@@ -66,7 +66,7 @@ export default async function VisibilityReportsPage({ params }: { params: Promis
           <div>
             <h1 className="text-2xl font-heading font-bold text-brand-navy">Visibility reports</h1>
             <p className="text-text-secondary font-body text-sm mt-1">
-              {firmName} · how the rebuilt site serves prospective clients, existing clients, future talent &amp; partners, Google search and AI discovery
+              {firmName} · how the rebuilt site serves prospective clients, ideal niche clients, future talent &amp; partners, Google search and AI discovery
             </p>
           </div>
           <RunReportDialog

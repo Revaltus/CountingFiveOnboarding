@@ -1,28 +1,29 @@
 import type { AudienceKey, CheckStatus } from '@/lib/visibility/types'
 
 // Static class strings so Tailwind sees every token at build time. Each
-// audience has three tones from the Revaltus deck arc: base (outer ring), mid,
-// and light (inner ring). Base fills carry white numerals only (decorative, as
-// in the deck); readable text sits in navy on the light tint.
+// audience has three arc tones from the Revaltus brochure — base (outer ring),
+// mid, light (inner ring) — plus a pale tint for panels. Base fills carry white
+// numerals only (decorative, as in the brochure); readable text sits in navy
+// on the tint.
 export const AUD_BG: Record<AudienceKey, string> = {
   prospects: 'bg-aud-prospects',
-  clients: 'bg-aud-clients',
+  niche: 'bg-aud-niche',
   talent: 'bg-aud-talent',
   search: 'bg-aud-search',
   ai: 'bg-aud-ai',
 }
 
-export const AUD_BG_LIGHT: Record<AudienceKey, string> = {
-  prospects: 'bg-aud-prospects-light',
-  clients: 'bg-aud-clients-light',
-  talent: 'bg-aud-talent-light',
-  search: 'bg-aud-search-light',
-  ai: 'bg-aud-ai-light',
+export const AUD_BG_TINT: Record<AudienceKey, string> = {
+  prospects: 'bg-aud-prospects-tint',
+  niche: 'bg-aud-niche-tint',
+  talent: 'bg-aud-talent-tint',
+  search: 'bg-aud-search-tint',
+  ai: 'bg-aud-ai-tint',
 }
 
 export const AUD_BORDER: Record<AudienceKey, string> = {
   prospects: 'border-aud-prospects',
-  clients: 'border-aud-clients',
+  niche: 'border-aud-niche',
   talent: 'border-aud-talent',
   search: 'border-aud-search',
   ai: 'border-aud-ai',
@@ -30,24 +31,29 @@ export const AUD_BORDER: Record<AudienceKey, string> = {
 
 export const AUD_MARKER: Record<AudienceKey, string> = {
   prospects: 'marker:text-aud-prospects',
-  clients: 'marker:text-aud-clients',
+  niche: 'marker:text-aud-niche',
   talent: 'marker:text-aud-talent',
   search: 'marker:text-aud-search',
   ai: 'marker:text-aud-ai',
 }
 
-// Arc tones, outer → inner.
-export const AUD_FILL_RINGS: Record<AudienceKey, [string, string, string]> = {
-  prospects: ['fill-aud-prospects', 'fill-aud-prospects-mid', 'fill-aud-prospects-light'],
-  clients: ['fill-aud-clients', 'fill-aud-clients-mid', 'fill-aud-clients-light'],
-  talent: ['fill-aud-talent', 'fill-aud-talent-mid', 'fill-aud-talent-light'],
-  search: ['fill-aud-search', 'fill-aud-search-mid', 'fill-aud-search-light'],
-  ai: ['fill-aud-ai', 'fill-aud-ai-mid', 'fill-aud-ai-light'],
+// Arc gradients, outer → inner ring: each sets --aud-stop on its
+// <linearGradient> for ARC_STOP_START / ARC_STOP_END to shade.
+export const AUD_RING_STOP: Record<AudienceKey, [string, string, string]> = {
+  prospects: ['[--aud-stop:var(--color-aud-prospects)]', '[--aud-stop:var(--color-aud-prospects-mid)]', '[--aud-stop:var(--color-aud-prospects-light)]'],
+  niche: ['[--aud-stop:var(--color-aud-niche)]', '[--aud-stop:var(--color-aud-niche-mid)]', '[--aud-stop:var(--color-aud-niche-light)]'],
+  talent: ['[--aud-stop:var(--color-aud-talent)]', '[--aud-stop:var(--color-aud-talent-mid)]', '[--aud-stop:var(--color-aud-talent-light)]'],
+  search: ['[--aud-stop:var(--color-aud-search)]', '[--aud-stop:var(--color-aud-search-mid)]', '[--aud-stop:var(--color-aud-search-light)]'],
+  ai: ['[--aud-stop:var(--color-aud-ai)]', '[--aud-stop:var(--color-aud-ai-mid)]', '[--aud-stop:var(--color-aud-ai-light)]'],
 }
+
+// The brochure's bands brighten on the left and deepen on the right.
+export const ARC_STOP_START = '[stop-color:color-mix(in_srgb,var(--aud-stop)_88%,white)]'
+export const ARC_STOP_END = '[stop-color:color-mix(in_srgb,var(--aud-stop),black_4%)]'
 
 export const AUD_FILL: Record<AudienceKey, string> = {
   prospects: 'fill-aud-prospects',
-  clients: 'fill-aud-clients',
+  niche: 'fill-aud-niche',
   talent: 'fill-aud-talent',
   search: 'fill-aud-search',
   ai: 'fill-aud-ai',
@@ -55,7 +61,7 @@ export const AUD_FILL: Record<AudienceKey, string> = {
 
 export const AUD_STROKE: Record<AudienceKey, string> = {
   prospects: 'stroke-aud-prospects',
-  clients: 'stroke-aud-clients',
+  niche: 'stroke-aud-niche',
   talent: 'stroke-aud-talent',
   search: 'stroke-aud-search',
   ai: 'stroke-aud-ai',

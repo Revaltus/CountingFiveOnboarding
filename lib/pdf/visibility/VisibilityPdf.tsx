@@ -16,11 +16,11 @@ const s = StyleSheet.create({
   badgeText: { fontSize: 10, color: PDF_COLORS.page, fontWeight: 'bold' },
   audName: { flexGrow: 1 },
   audLabel: { fontSize: 12, fontWeight: 'bold', color: PDF_COLORS.ink },
-  audQuestion: { fontSize: 9, color: PDF_COLORS.muted },
+  audSummary: { fontSize: 9, color: PDF_COLORS.muted },
   audScore: { fontSize: 14, fontWeight: 'bold', color: PDF_COLORS.ink },
   band: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 4, borderLeftWidth: 6, marginBottom: 14 },
   h2: { fontSize: 18, fontWeight: 'bold', color: PDF_COLORS.ink, marginBottom: 2 },
-  question: { fontSize: 11, color: PDF_COLORS.body },
+  summary: { fontSize: 11, color: PDF_COLORS.body },
   focus: { fontSize: 9, color: PDF_COLORS.muted, marginTop: 2 },
   bandScore: { fontSize: 22, fontWeight: 'bold', color: PDF_COLORS.ink, marginLeft: 'auto' },
   h3: { fontSize: 11, fontWeight: 'bold', color: PDF_COLORS.teal, marginTop: 12, marginBottom: 6 },
@@ -73,13 +73,13 @@ export function VisibilityPdf({ result, narrative, firmName }: { result: Visibil
         {AUDIENCES.map((a) => {
           const sc = result.audienceScores[a.key]
           return (
-            <View key={a.key} style={[s.audRow, { backgroundColor: PDF_AUDIENCE_COLORS[a.key].light, borderLeftColor: PDF_AUDIENCE_COLORS[a.key].base }]}>
+            <View key={a.key} style={[s.audRow, { backgroundColor: PDF_AUDIENCE_COLORS[a.key].tint, borderLeftColor: PDF_AUDIENCE_COLORS[a.key].base }]}>
               <View style={[s.badge, { backgroundColor: PDF_AUDIENCE_COLORS[a.key].base }]}>
                 <Text style={s.badgeText}>{a.n}</Text>
               </View>
               <View style={s.audName}>
                 <Text style={s.audLabel}>{a.label}</Text>
-                <Text style={s.audQuestion}>{a.question}</Text>
+                <Text style={s.audSummary}>{a.summary}</Text>
               </View>
               <Text style={s.audScore}>{sc.score ?? '—'}{sc.grade ? ` ${sc.grade}` : ''}</Text>
             </View>
@@ -96,13 +96,13 @@ export function VisibilityPdf({ result, narrative, firmName }: { result: Visibil
         const c = PDF_AUDIENCE_COLORS[a.key]
         return (
           <Page key={a.key} size="LETTER" style={s.page}>
-            <View style={[s.band, { backgroundColor: c.light, borderLeftColor: c.base }]}>
+            <View style={[s.band, { backgroundColor: c.tint, borderLeftColor: c.base }]}>
               <View style={[s.badge, { backgroundColor: c.base }]}>
                 <Text style={s.badgeText}>{a.n}</Text>
               </View>
               <View>
                 <Text style={s.h2}>{a.label}</Text>
-                <Text style={s.question}>{a.question}</Text>
+                <Text style={s.summary}>{a.summary}</Text>
                 <Text style={s.focus}>Content focus: {a.focus}</Text>
               </View>
               <Text style={s.bandScore}>{sc.score ?? '—'}{sc.grade ? ` ${sc.grade}` : ''}</Text>

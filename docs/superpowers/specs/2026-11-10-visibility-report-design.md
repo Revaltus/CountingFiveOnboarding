@@ -1,7 +1,7 @@
 # Visibility Report — design spec (2026-11-10)
 
 ## Context
-The pre-sale Site Audit (`lib/audit/*`, `audit_runs`) grades a prospect's *old* site across 10 technical categories. Once Revaltus has rebuilt the site, we have no way to re-measure it, tie the result to the client, or show progress over time. The Revaltus story is moving to five audiences, from the PASBA deck: **Prospective clients · Existing clients · Future talent & partners · Google search · AI discovery**. We need a client-facing **Visibility Report** that:
+The pre-sale Site Audit (`lib/audit/*`, `audit_runs`) grades a prospect's *old* site across 10 technical categories. Once Revaltus has rebuilt the site, we have no way to re-measure it, tie the result to the client, or show progress over time. The Revaltus story is moving to five audiences, from the PASBA deck, revised by the 2026-10 Revaltus brochure: **Prospective clients · Ideal niche clients · Future talent & partners · Google search · AI discovery**. We need a client-facing **Visibility Report** that:
 - scores the rebuilt site for each of those five audiences, with an overview;
 - belongs to the client (`sessions` row, run from `/admin/content/[id]`);
 - is kept as a history of reports.
@@ -39,8 +39,8 @@ Decisions so far:
   - In parallel, run `places-lookup.ts` (GBP rating and reviews) and Serper ranks.
   - Then run the AI review and the probe, then score.
 - **`rubric.ts`** holds pure, versioned checks per audience: `{id, audience, label, weight, evaluate(ctx) → pass|partial|fail|n/a + evidenceUrl}`. `ctx` = the audit result + `SessionSchema` + external evidence + AI judgments.
-  1. **Prospective clients:** each MBP niche and service has a page; CTA, contact and phone on key pages; mobile performance and UX; AI read: "does the niche page answer *can you help with what I need?*"
-  2. **Existing clients:** Client Center / `clientPortals` links are live; the full service breadth is visible for cross-sell; resource freshness (latest post date); a subscribe or newsletter path; success stories.
+  1. **Prospective clients:** each MBP service has a page; CTA, contact and phone on key pages; mobile performance and UX; AI read: "do the pages explain your services, who you help, and how to begin?"
+  2. **Ideal niche clients** (rubric 2026.11.3, replaced Existing clients): each MBP niche has a page; articles/resources cover each niche; resource freshness (latest post date); industry pages name a team member; success stories; AI read: "do industry pages show knowledge of the industry, its challenges, and the work you do?"
   3. **Future talent & partners:** careers page, open roles or an apply path, `JobPosting` schema; team bios with headshots and credentials; culture and values; affiliations and partner path; succession, M&A or investment content.
   4. **Google search:** onpage_seo, indexability, technical, performance, local_seo, LocalBusiness schema (audit findings); Serper rank for each MBP `targetKeywords` × primary city (≤10 queries); GBP rating and review count.
   5. **AI discovery:** the ai_llm category; llms.txt; AI crawlers allowed; Organization, FAQ and Person schema; entity clarity (the About page and MBP positioning agree, judged by AI); the AI answer probe.

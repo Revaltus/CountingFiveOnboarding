@@ -8,7 +8,7 @@ import type { TrendPoint } from '@/lib/visibility/trend'
 import type { AudienceKey, VisibilityNarrative, VisibilityResult } from '@/lib/visibility/types'
 import { ReportBody } from './ReportBody'
 import { AudienceBadge } from './AudienceBadge'
-import { AUD_BG_LIGHT, AUD_BORDER } from './audience-styles'
+import { AUD_BG_TINT, AUD_BORDER } from './audience-styles'
 
 const inputCls =
   'w-full rounded-lg border border-border-default bg-surface-card px-3 py-2 font-body text-sm text-text-primary focus:border-brand-cyan focus:outline-none'
@@ -167,11 +167,11 @@ export function ReportEditor({
             />
           </div>
           {AUDIENCES.map((a) => (
-            <div key={a.key} className={`rounded-lg border-l-[6px] ${AUD_BORDER[a.key]} ${AUD_BG_LIGHT[a.key]} p-4`}>
+            <div key={a.key} className={`rounded-lg border-l-[6px] ${AUD_BORDER[a.key]} ${AUD_BG_TINT[a.key]} p-4`}>
               <p className="mb-3 flex items-center gap-2 text-sm font-heading font-semibold text-brand-navy">
                 <AudienceBadge audience={a.key} size="sm" />
                 {a.label}
-                <span className="font-body font-normal text-text-secondary">— {a.question}</span>
+                <span className="font-body font-normal text-text-secondary">— {a.summary}</span>
               </p>
               <div className="grid gap-4 md:grid-cols-2">
               <div>

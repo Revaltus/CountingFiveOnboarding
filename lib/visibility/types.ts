@@ -1,6 +1,6 @@
 import type { CategoryScoreMap, Grade } from '@/types/audit-result'
 
-export type AudienceKey = 'prospects' | 'clients' | 'talent' | 'search' | 'ai'
+export type AudienceKey = 'prospects' | 'niche' | 'talent' | 'search' | 'ai'
 
 export type CheckStatus = 'pass' | 'partial' | 'fail' | 'na'
 

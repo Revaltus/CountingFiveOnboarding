@@ -34,10 +34,10 @@ const MAX_PAGES = 25
 const PAGE_TEXT_CHARS = 400
 const SCHEMA_CHARS = 6000
 const MAX_HINTS = 10
-const PRIORITY_KINDS: PageKind[] = ['about', 'contact', 'careers', 'team', 'client_center', 'partners', 'succession', 'testimonials', 'resources']
+const PRIORITY_KINDS: PageKind[] = ['about', 'contact', 'careers', 'team', 'partners', 'succession', 'testimonials', 'resources']
 
 const STATIC_PREFIX = `You are reviewing a professional-services firm's newly rebuilt website for a client-facing "Visibility Report". The report measures how well the site serves five audiences:
-${AUDIENCES.map((a) => `${a.n}. ${a.label} — "${a.question}"`).join('\n')}
+${AUDIENCES.map((a) => `${a.n}. ${a.label} — ${a.summary}`).join('\n')}
 
 You receive (after this introduction): the firm profile, a list of crawled pages, and the results of automated checks. Use ONLY that material. Never invent services, facts, numbers, awards, or results that are not in it.
 

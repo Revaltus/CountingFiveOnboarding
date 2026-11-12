@@ -32,13 +32,13 @@ describe('scoreAudience', () => {
   })
 
   it('ignores other audiences', () => {
-    expect(scoreAudience([check('clients', 'fail'), check('prospects', 'pass')], 'prospects').score).toBe(100)
+    expect(scoreAudience([check('niche', 'fail'), check('prospects', 'pass')], 'prospects').score).toBe(100)
   })
 })
 
 describe('scoreAll', () => {
   it('averages the non-null audience scores', () => {
-    const out = scoreAll([check('prospects', 'pass'), check('clients', 'fail'), check('talent', 'partial'), check('search', 'na')])
+    const out = scoreAll([check('prospects', 'pass'), check('niche', 'fail'), check('talent', 'partial'), check('search', 'na')])
     expect(out.audienceScores.prospects.score).toBe(100)
     expect(out.audienceScores.search.score).toBeNull()
     expect(out.audienceScores.ai.score).toBeNull()

@@ -36,14 +36,17 @@ export function ReportBody({
                 <AudienceBadge audience={a.key} size="sm" />
                 <span className="min-w-0 flex-1 text-text-primary">
                   <span className="font-heading font-semibold">{a.label}</span>{' '}
-                  <span className="text-text-secondary">— {a.question}</span>
+                  <span className="text-text-secondary">— {a.summary}</span>
                 </span>
                 <AudienceScoreChip audience={a.key} score={result.audienceScores[a.key]?.score ?? null} />
               </li>
             ))}
           </ul>
         </div>
-        <AudienceArc scores={result.audienceScores} overall={result.overallScore} className="w-full" />
+        <figure>
+          <AudienceArc scores={result.audienceScores} overall={result.overallScore} className="w-full" />
+          <figcaption className="mt-2 text-center text-xs font-body italic text-text-secondary">Focused visibility across all five channels</figcaption>
+        </figure>
       </div>
 
       {AUDIENCES.map((a) => (

@@ -18,7 +18,7 @@ describe('evaluateRubric', () => {
     const checks = evaluateRubric(goodContext())
     const { audienceScores } = scoreAll(checks)
     expect(audienceScores.prospects.score).toBeGreaterThanOrEqual(85)
-    expect(audienceScores.clients.score).toBeGreaterThanOrEqual(85)
+    expect(audienceScores.niche.score).toBeGreaterThanOrEqual(85)
     expect(audienceScores.talent.score).toBeGreaterThanOrEqual(85)
     expect(audienceScores.search.score).toBeGreaterThanOrEqual(85)
     expect(audienceScores.ai.score).toBeGreaterThanOrEqual(85)
@@ -27,13 +27,13 @@ describe('evaluateRubric', () => {
   it('cites evidence pages for site checks', () => {
     const c = byId(evaluateRubric(goodContext()))
     expect(c.get('t.careers')?.evidenceUrl).toBe('https://firm.com/careers')
-    expect(c.get('p.niche_pages')?.evidenceUrl).toBe('https://firm.com/industries/dental-practices')
+    expect(c.get('n.niche_pages')?.evidenceUrl).toBe('https://firm.com/industries/dental-practices')
   })
 
   it('handles an empty site without throwing and marks unrun evidence n/a', () => {
     const checks = evaluateRubric(emptyContext())
     const c = byId(checks)
-    for (const id of ['s.ranks', 's.gbp', 'a.probe', 'p.answers_need', 'c.what_else', 't.story', 'a.entity_clarity']) {
+    for (const id of ['s.ranks', 's.gbp', 'a.probe', 'p.answers_need', 'n.understands_industry', 't.story', 'a.entity_clarity']) {
       expect(c.get(id)?.status).toBe('na')
     }
     expect(c.get('t.careers')?.status).toBe('fail')
@@ -53,7 +53,7 @@ describe('evaluateRubric', () => {
     const at = (days: number) => {
       const d = new Date(NOW.getTime() - days * 86_400_000).toISOString().slice(0, 10)
       const ctx = { ...goodContext(), sitemapEntries: [{ url: 'https://firm.com/blog/p', lastmod: d, type: 'post' }] }
-      return byId(evaluateRubric(ctx)).get('c.fresh_content')?.status
+      return byId(evaluateRubric(ctx)).get('n.fresh_content')?.status
     }
     expect(at(60)).toBe('pass')
     expect(at(61)).toBe('partial')
@@ -85,9 +85,18 @@ describe('evaluateRubric', () => {
     expect(c?.detail).toMatch(/stated goals/)
   })
 
-  it('fails the portal check when portals are listed but not linked', () => {
-    const ctx = goodContext()
-    ctx.index = ctx.index.map((p) => ({ ...p, html: p.html.replace('sharefile', 'nothing') }))
-    expect(byId(evaluateRubric(ctx)).get('c.portal')?.status).toBe('fail')
+  it('scores niche articles and experts from the industry pages', () => {
+    const c = byId(evaluateRubric(goodContext()))
+    expect(c.get('n.niche_content')?.status).toBe('pass')
+    expect(c.get('n.niche_content')?.evidenceUrl).toBe('https://firm.com/blog/dental-practice-tax-tips')
+    expect(c.get('n.niche_experts')?.status).toBe('pass')
+
+    const thin = goodContext()
+    thin.index = thin.index
+      .filter((p) => p.path !== '/blog/dental-practice-tax-tips')
+      .map((p) => (p.path === '/industries/dental-practices' ? { ...p, html: '', text: '' } : p))
+    const t = byId(evaluateRubric(thin))
+    expect(t.get('n.niche_content')?.status).toBe('fail')
+    expect(t.get('n.niche_experts')?.status).toBe('fail')
   })
 })

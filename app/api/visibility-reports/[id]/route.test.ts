@@ -36,7 +36,7 @@ const narrative = {
   overview: 'Your site is strong.',
   audiences: {
     prospects: { wins: ['a'], opportunities: ['b'] },
-    clients: { wins: [], opportunities: [] },
+    niche: { wins: [], opportunities: [] },
     talent: { wins: [], opportunities: [] },
     search: { wins: [], opportunities: [] },
     ai: { wins: [], opportunities: [] },

@@ -278,7 +278,7 @@ This does NOT apply to the **background** impact reviews (`reviewContentForMbpIm
 - **Apply/Dismiss.** The Apply/Dismiss route calls the `qa_apply_page_update` RPC (migration 084), which does a server-side md5+rev CAS — PostgREST can't filter on long text in the URL.
 
 ### Visibility Report
-Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a post-launch, client-facing report that scores a rebuilt site for the five audiences (prospective clients, existing clients, future talent & partners, Google search, AI discovery).
+Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a post-launch, client-facing report that scores a rebuilt site for the five audiences (prospective clients, ideal niche clients, future talent & partners, Google search, AI discovery), as defined in the Revaltus brochure.
 - **Gate:** every `/api/visibility-reports/**` route and both admin pages use `requireOnboardingSessionAccess` (admins + managers assigned to the client). Editors and Site Owners are excluded. The public `/visibility/[token]` page and `/pdf?token=` look up by `share_token` only and 404 unless the report is `published`.
 - **Engine:** `lib/visibility/run.ts` reuses `runAudit({ skipIntelligence: true })` for crawl + scores, then:
   - the pure rubric (`rubric.ts`);
@@ -288,7 +288,8 @@ Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a po
 - **Rubric versioning:** changing a check's id, weight or status rule MUST bump `RUBRIC_VERSION`. Trends (`lib/visibility/trend.ts`) compare only published reports with an equal version.
 - **Lifecycle:** queued → running (atomic claim in `/run`, `after()` worker) → draft → published (PDF rendered to `pdfs/{sessionId}/visibility-{id}.pdf`, new `share_token`). Only drafts are editable; unpublish clears the token. `sweep-stuck-jobs` errors runs stuck >15 min.
 - **URL:** `sessions.live_site_url` (migration 087) is the operator-confirmed rebuilt-site URL; `website_url` stays the old site. The run dialog pre-fills live URL → staging preview → website URL (`report-url.ts`).
-- **Colours:** every per-audience element is colour-coded with the deck's sampled colours: `--color-aud-<key>` plus `-mid` and `-light` in `app/globals.css`, mirrored for react-pdf in `lib/pdf/visibility/palette.ts`. Keep both in sync. White numerals go only on base fills; readable text is navy on the light tint, never white on the yellow. Audience order, questions and content-focus copy live in `lib/visibility/audiences.ts`.
+- **Colours:** every per-audience element is colour-coded with the brochure's sampled colours: `--color-aud-<key>` plus `-mid` and `-light` (the arc's three rings, drawn as left→right gradients) and `-tint` (panel/badge backgrounds) in `app/globals.css`, mirrored for react-pdf in `lib/pdf/visibility/palette.ts`. Keep both in sync. White numerals go only on base fills; readable text is navy on the tint, never white on the yellow. Audience order, labels, brochure summaries and content-focus copy live in `lib/visibility/audiences.ts`.
+- **Arc:** each audience's numbered dot is plotted by score along its band (`scoreDotRadius`, `lib/visibility/arc-geometry.ts`): inner edge = 0, outer edge = 100.
 - **Future:** GSC/GA4, scheduled runs, Site Owner view.
 
 ### Design Studio

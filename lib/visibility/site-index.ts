@@ -20,7 +20,6 @@ export type PageKind =
   | 'partners'
   | 'succession'
   | 'resources'
-  | 'client_center'
   | 'testimonials'
 
 const KIND_PATTERNS: Record<PageKind, RegExp> = {
@@ -31,7 +30,6 @@ const KIND_PATTERNS: Record<PageKind, RegExp> = {
   partners: /partner|alliance|referral|affiliat|association|membership/,
   succession: /succession|merger|acqui|m&a|practice[- ](sale|transition)|join[- ]forces|investment/,
   resources: /resource|blog|insight|article|news|library/,
-  client_center: /client[- ]?(center|portal|login|resources)|portal/,
   testimonials: /testimonial|review|case[- ]stud|success[- ]stor/,
 }
 

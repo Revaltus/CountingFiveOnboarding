@@ -226,7 +226,7 @@ function OverflowMenu({
                 href={`/admin/content/${sessionId}/visibility`}
                 role="menuitem"
                 className={`${itemClass} text-text-secondary hover:text-brand-cyan`}
-                title="Score this site for the five audiences (prospective clients, existing clients, future talent & partners, Google search, AI discovery) and share a report with the client."
+                title="Score this site for the five audiences (prospective clients, ideal niche clients, future talent & partners, Google search, AI discovery) and share a report with the client."
                 onClick={() => setOpen(false)}
               >
                 Visibility reports →

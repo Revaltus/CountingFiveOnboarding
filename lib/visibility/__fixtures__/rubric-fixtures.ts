@@ -140,7 +140,10 @@ export function goodIndex(): IndexedPage[] {
       text: 'Tax Planning for dental practices. Subscribe to our newsletter.',
       html: '<a href="https://firm.sharefile.com">Client portal</a> Subscribe to our newsletter',
     }),
-    pageFixture('/industries/dental-practices', 'Dental Practices'),
+    pageFixture('/industries/dental-practices', 'Dental Practices', {
+      text: 'Dental practices face thin margins and complex payroll. Jane Doe leads our dental team.',
+      html: 'Jane Doe leads our dental team.',
+    }),
     pageFixture('/services/tax-planning', 'Tax Planning'),
     pageFixture('/careers', 'Careers', {
       text: 'Our culture and values. Apply for an open position.',
@@ -153,6 +156,7 @@ export function goodIndex(): IndexedPage[] {
     pageFixture('/succession-planning', 'Practice Transition'),
     pageFixture('/testimonials', 'Client Success Stories'),
     pageFixture('/blog', 'Insights'),
+    pageFixture('/blog/dental-practice-tax-tips', 'Tax Tips for Dental Practices'),
   ]
 }
 
@@ -181,7 +185,7 @@ export function goodContext(): RubricContext {
     ],
     ai: [
       { checkId: 'p.answers_need', status: 'pass', detail: 'Clear', evidenceUrl: 'https://firm.com/industries/dental-practices' },
-      { checkId: 'c.what_else', status: 'pass', detail: 'Clear', evidenceUrl: null },
+      { checkId: 'n.understands_industry', status: 'pass', detail: 'Clear', evidenceUrl: null },
       { checkId: 't.story', status: 'partial', detail: 'Thin', evidenceUrl: null },
       { checkId: 'a.entity_clarity', status: 'pass', detail: 'Consistent', evidenceUrl: null },
     ],

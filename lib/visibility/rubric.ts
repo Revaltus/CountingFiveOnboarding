@@ -12,7 +12,7 @@ import type { SessionSchema } from '@/types/session-schema'
 import { findPageMentioning, pagesOfKind, type IndexedPage } from './site-index'
 import type { AudienceKey, CheckResult, CheckStatus, GbpEvidence, ProbeResult, RankResult } from './types'
 
-export const RUBRIC_VERSION = '2026.11.2'
+export const RUBRIC_VERSION = '2026.11.3'
 
 export interface AiJudgment {
   checkId: string
@@ -39,16 +39,16 @@ export const AI_CHECKS: ReadonlyArray<{ id: string; audience: AudienceKey; label
   {
     id: 'p.answers_need',
     audience: 'prospects',
-    label: 'Pages answer "can you help with what I need?"',
+    label: 'Pages explain your services, who you help, and how to begin',
     question:
-      'For the firm\'s main industries and services, does a prospect landing on the relevant page quickly learn that the firm serves them, what it does for them, and how to take the next step?',
+      'For the firm\'s main services, does a prospect landing on the relevant page quickly learn what the firm does, whom it helps, and how to take the next step?',
   },
   {
-    id: 'c.what_else',
-    audience: 'clients',
-    label: 'Existing clients can discover more ways the firm helps',
+    id: 'n.understands_industry',
+    audience: 'niche',
+    label: 'Industry pages show you understand their business',
     question:
-      'Would an existing client browsing the site discover the firm\'s other services (cross-sell), client resources, and reasons to stay engaged?',
+      'Do the firm\'s industry pages show real knowledge of each industry: its specific challenges, and the specific work the firm does for businesses in it?',
   },
   {
     id: 't.story',
@@ -84,14 +84,14 @@ const res = (status: CheckStatus, detail: string, evidenceUrl: string | null = n
 const tiered = (value: number, passAt: number, partialAt: number): CheckStatus =>
   value >= passAt ? 'pass' : value >= partialAt ? 'partial' : 'fail'
 
-function coverage(names: string[], index: IndexedPage[], headingOnly: boolean, noun: string): Partial3 {
+function coverage(names: string[], index: IndexedPage[], headingOnly: boolean, noun: string, foundPhrase?: string): Partial3 {
   if (names.length === 0) return res('na', `No ${noun} in the firm profile`)
   const found = names.map((n) => ({ n, page: findPageMentioning(index, n, { headingOnly }) }))
   const hits = found.filter((f) => f.page)
   const share = hits.length / names.length
   const missing = found.filter((f) => !f.page).map((f) => f.n)
   const detail =
-    `${hits.length} of ${names.length} ${noun} ${headingOnly ? 'have a dedicated page' : 'are mentioned on the site'}` +
+    `${hits.length} of ${names.length} ${noun} ${foundPhrase ?? (headingOnly ? 'have a dedicated page' : 'are mentioned on the site')}` +
     (missing.length ? ` — missing: ${missing.slice(0, 5).join(', ')}` : '')
   return res(tiered(share, 0.8, headingOnly ? 0.4 : 0.6), detail, hits[0]?.page?.url ?? null)
 }
@@ -107,17 +107,6 @@ function aiCheck(ctx: RubricContext, id: string): Partial3 {
   const j = ctx.ai.find((a) => a.checkId === id)
   if (!j) return res('na', 'AI review did not assess this check')
   return res(j.status, j.detail, j.evidenceUrl)
-}
-
-const htmlHas = (index: IndexedPage[], re: RegExp): IndexedPage | null =>
-  index.find((p) => re.test(p.html) || re.test(p.text)) ?? null
-
-const hostOf = (url: string): string | null => {
-  try {
-    return new URL(url).host.toLowerCase().replace(/^www\./, '')
-  } catch {
-    return null
-  }
 }
 
 const RESOURCE_URL = /blog|resource|insight|article|news|post/i
@@ -140,8 +129,6 @@ function prospects(ctx: RubricContext): CheckResult[] {
   const contact = pagesOfKind(ctx.index, 'contact')[0] ?? null
   const mobile = f.performance.mobile_score
   return [
-    make('p.niche_pages', a, 'Each industry you serve has its own page', 3, 'site',
-      coverage(activeNiches(ctx.schema).map((n) => n.name), ctx.index, true, 'industries')),
     make('p.service_pages', a, 'Each service has its own page', 3, 'site',
       coverage(activeServices(ctx.schema).map((s) => s.name), ctx.index, true, 'services')),
     make('p.cta', a, 'Pages invite the next step', 2, 'audit',
@@ -160,20 +147,13 @@ function prospects(ctx: RubricContext): CheckResult[] {
   ]
 }
 
-function clients(ctx: RubricContext): CheckResult[] {
-  const a: AudienceKey = 'clients'
-  const portals = (ctx.schema.clientPortals ?? []).filter((p) => p && typeof p.url === 'string' && p.url.trim())
-  let portal: Partial3
-  if (portals.length) {
-    const hosts = portals.map((p) => hostOf(p.url)).filter((h): h is string => !!h)
-    const linked = ctx.index.find((pg) => hosts.some((h) => pg.html.toLowerCase().includes(h)))
-    portal = linked
-      ? res('pass', 'Client portal links are live on the site', linked.url)
-      : res('fail', `${portals.length} client portal${portals.length === 1 ? '' : 's'} on file, but none are linked from the site`)
-  } else {
-    const cc = pagesOfKind(ctx.index, 'client_center')[0]
-    portal = cc ? res('pass', 'Client center page found', cc.url) : res('na', 'No client portals on file')
-  }
+function niche(ctx: RubricContext): CheckResult[] {
+  const a: AudienceKey = 'niche'
+  const niches = activeNiches(ctx.schema).map((n) => n.name)
+  const nichePages = niches
+    .map((n) => findPageMentioning(ctx.index, n, { headingOnly: true }))
+    .filter((p): p is IndexedPage => !!p)
+  const resourcePages = ctx.index.filter((p) => RESOURCE_URL.test(p.path))
 
   const dated = ctx.sitemapEntries
     .filter((e) => RESOURCE_URL.test(e.url) && e.lastmod)
@@ -188,22 +168,39 @@ function clients(ctx: RubricContext): CheckResult[] {
     fresh = res(days <= 60 ? 'pass' : days <= 180 ? 'partial' : 'fail', `Newest article is ${days} days old`, dated[0].e.url)
   }
 
-  const subscribe = htmlHas(ctx.index, /subscribe|newsletter/i)
+  const members = activeTeam(ctx.schema)
+  let experts: Partial3
+  if (!niches.length) {
+    experts = res('na', 'No industries in the firm profile')
+  } else if (!members.length) {
+    experts = res('na', 'No team members in the firm profile')
+  } else if (!nichePages.length) {
+    experts = res('fail', 'No industry pages to connect your experts to')
+  } else {
+    const names = members.map((m) => m.name.trim().toLowerCase())
+    const withExpert = nichePages.filter((p) => {
+      const hay = `${p.html} ${p.text}`.toLowerCase()
+      return names.some((n) => hay.includes(n))
+    })
+    experts = res(tiered(withExpert.length / nichePages.length, 0.8, 0.4),
+      `${withExpert.length} of ${nichePages.length} industry pages name a team member`, withExpert[0]?.url ?? null)
+  }
+
   const stories =
     pagesOfKind(ctx.index, 'testimonials')[0] ??
     ctx.index.find((p) => p.schemaTypes.some((t) => /review|testimonial/i.test(t))) ??
     null
 
   return [
-    make('c.portal', a, 'Client portals are one click away', 2, 'site', portal),
-    make('c.service_breadth', a, 'Every service is visible for cross-sell', 2, 'site',
-      coverage(activeServices(ctx.schema).map((s) => s.name), ctx.index, false, 'services')),
-    make('c.fresh_content', a, 'Fresh insights and resources', 2, 'site', fresh),
-    make('c.subscribe', a, 'A way to subscribe for updates', 1, 'site',
-      subscribe ? res('pass', 'Newsletter / subscribe option found', subscribe.url) : res('fail', 'No newsletter or subscribe option found')),
-    make('c.success_stories', a, 'Client success stories', 1, 'site',
+    make('n.niche_pages', a, 'Each industry you serve has its own page', 3, 'site',
+      coverage(niches, ctx.index, true, 'industries')),
+    make('n.niche_content', a, 'Articles written for each industry', 2, 'site',
+      coverage(niches, resourcePages, false, 'industries', 'are covered in articles or resources')),
+    make('n.fresh_content', a, 'Fresh insights and resources', 1, 'site', fresh),
+    make('n.niche_experts', a, 'Industry pages connect to your experts', 1, 'site', experts),
+    make('n.case_studies', a, 'Client success stories', 1, 'site',
       stories ? res('pass', 'Success stories or testimonials found', stories.url) : res('fail', 'No testimonials or success stories found')),
-    make('c.what_else', a, AI_CHECKS[1].label, 2, 'ai', aiCheck(ctx, 'c.what_else')),
+    make('n.understands_industry', a, AI_CHECKS[1].label, 3, 'ai', aiCheck(ctx, 'n.understands_industry')),
   ]
 }
 
@@ -330,5 +327,5 @@ function ai(ctx: RubricContext): CheckResult[] {
 }
 
 export function evaluateRubric(ctx: RubricContext): CheckResult[] {
-  return [...prospects(ctx), ...clients(ctx), ...talent(ctx), ...search(ctx), ...ai(ctx)]
+  return [...prospects(ctx), ...niche(ctx), ...talent(ctx), ...search(ctx), ...ai(ctx)]
 }

@@ -8,7 +8,7 @@ import type { SessionSchema } from '@/types/session-schema'
 
 const fullAudiences = {
   prospects: { wins: ['a'], opportunities: ['b'] },
-  clients: { wins: [], opportunities: [] },
+  niche: { wins: [], opportunities: [] },
   talent: { wins: [], opportunities: [] },
   search: { wins: [], opportunities: [] },
   ai: { wins: [], opportunities: [] },

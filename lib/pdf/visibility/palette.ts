@@ -10,13 +10,13 @@ export const PDF_COLORS = {
   faint: '#94A3B8',
   rule: '#E2E8F0',
   page: '#ffffff',
-  core: '#1C2743',
+  core: '#101B2C',
 } as const
 
-export const PDF_AUDIENCE_COLORS: Record<AudienceKey, { base: string; mid: string; light: string }> = {
-  prospects: { base: '#F5C045', mid: '#F8DB82', light: '#FBE9B1' },
-  clients: { base: '#74B1C8', mid: '#9ECADA', light: '#C6DFEA' },
-  talent: { base: '#EF9544', mid: '#F4BE85', light: '#FBE5C8' },
-  search: { base: '#9FA876', mid: '#CACEAB', light: '#ECEDDE' },
-  ai: { base: '#948492', mid: '#B0A3AE', light: '#CEC5CB' },
+export const PDF_AUDIENCE_COLORS: Record<AudienceKey, { base: string; mid: string; light: string; tint: string }> = {
+  prospects: { base: '#F3B848', mid: '#F7C770', light: '#F9D188', tint: '#FDF5E5' },
+  niche: { base: '#529DB1', mid: '#83B2C0', light: '#9FC2CC', tint: '#E7F1F4' },
+  talent: { base: '#EC9049', mid: '#EFA264', light: '#F2B177', tint: '#FCEFE6' },
+  search: { base: '#8F9670', mid: '#9CA17E', light: '#A7AC8B', tint: '#EFF0EB' },
+  ai: { base: '#7C6D6D', mid: '#9C8F8E', light: '#B3A9A7', tint: '#EDEBEB' },
 }

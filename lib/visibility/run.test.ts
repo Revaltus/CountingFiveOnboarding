@@ -78,7 +78,7 @@ describe('runVisibilityReport', () => {
   it('uses AI judgments and narrative when the review succeeds', async () => {
     h.runAiReview.mockResolvedValue({
       judgments: [{ checkId: 't.story', status: 'pass', detail: 'Strong', evidenceUrl: null }],
-      narrative: { overview: 'Your site is strong.', audiences: { prospects: { wins: [], opportunities: [] }, clients: { wins: [], opportunities: [] }, talent: { wins: ['x'], opportunities: [] }, search: { wins: [], opportunities: [] }, ai: { wins: [], opportunities: [] } } },
+      narrative: { overview: 'Your site is strong.', audiences: { prospects: { wins: [], opportunities: [] }, niche: { wins: [], opportunities: [] }, talent: { wins: ['x'], opportunities: [] }, search: { wins: [], opportunities: [] }, ai: { wins: [], opportunities: [] } } },
     })
     const { result, narrative } = await runVisibilityReport({ url: 'https://firm.com', schema: schemaFixture(), firmName: 'Firm CPA', isLiveDomain: true, ctx, deadline: Date.now() + 600_000 })
     expect(narrative.overview).toBe('Your site is strong.')
