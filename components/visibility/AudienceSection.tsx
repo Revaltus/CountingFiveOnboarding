@@ -1,6 +1,6 @@
 import type { AudienceMeta } from '@/lib/visibility/audiences'
 import type { AudienceScore, CheckResult, VisibilityNarrativeSection } from '@/lib/visibility/types'
-import { AUD_BG, AUD_BG_TINT, AUD_BORDER, AUD_MARKER } from './audience-styles'
+import { AUD_BG, AUD_BG_TINT, AUD_BORDER, AUD_MARKER, audienceSectionId } from './audience-styles'
 import { AudienceBadge } from './AudienceBadge'
 import { CheckList } from './CheckList'
 
@@ -19,8 +19,13 @@ export function AudienceSection({
 }) {
   const listCls = `mt-2 list-disc space-y-1.5 pl-5 text-sm font-body text-text-primary ${AUD_MARKER[meta.key]}`
   return (
-    <section className={`overflow-hidden rounded-xl border border-border-default border-l-[6px] ${AUD_BORDER[meta.key]} bg-surface-card shadow-subtle`}>
-      <div className={`flex items-start gap-4 px-6 py-4 ${AUD_BG_TINT[meta.key]}`}>
+    <details
+      id={audienceSectionId(meta.key)}
+      className={`group scroll-mt-6 overflow-hidden rounded-xl border border-border-default border-l-[6px] ${AUD_BORDER[meta.key]} bg-surface-card shadow-subtle`}
+    >
+      <summary
+        className={`flex cursor-pointer list-none items-start gap-4 px-6 py-4 transition-[filter] hover:brightness-[0.97] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-cyan [&::-webkit-details-marker]:hidden ${AUD_BG_TINT[meta.key]}`}
+      >
         <AudienceBadge audience={meta.key} size="lg" />
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-heading font-bold text-brand-navy">{meta.label}</h2>
@@ -31,7 +36,14 @@ export function AudienceSection({
           <p className="text-2xl font-heading font-bold text-brand-navy">{score.score ?? '—'}</p>
           {score.grade && <p className="text-xs font-body text-text-secondary">Grade {score.grade}</p>}
         </div>
-      </div>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="mt-1.5 h-5 w-5 shrink-0 fill-none stroke-brand-navy stroke-2 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+        >
+          <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </summary>
 
       <div className="grid gap-5 px-6 py-5 md:grid-cols-2">
         <div>
@@ -66,6 +78,6 @@ export function AudienceSection({
           <CheckList checks={checks} />
         </div>
       </details>
-    </section>
+    </details>
   )
 }

@@ -1,7 +1,6 @@
 import { AUDIENCES } from '@/lib/visibility/audiences'
 import type { VisibilityNarrative, VisibilityResult } from '@/lib/visibility/types'
-import { AudienceArc } from './AudienceArc'
-import { AudienceBadge, AudienceScoreChip } from './AudienceBadge'
+import { AudienceOverview } from './AudienceOverview'
 import { AudienceSection } from './AudienceSection'
 import type { TrendPoint } from '@/lib/visibility/trend'
 import { TrendTable } from './TrendTable'
@@ -26,28 +25,12 @@ export function ReportBody({
   const skipped = result.unavailable.map((u) => UNAVAILABLE_COPY[u]).filter(Boolean)
   return (
     <div className="space-y-8">
-      <div className="grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div>
-          <h2 className="text-xs font-heading font-semibold uppercase tracking-wide text-brand-cyan">Overview</h2>
-          <p className="mt-2 whitespace-pre-line text-base font-body leading-relaxed text-text-primary">{narrative.overview}</p>
-          <ul className="mt-5 space-y-1.5">
-            {AUDIENCES.map((a) => (
-              <li key={a.key} className="flex items-center gap-3 text-sm font-body">
-                <AudienceBadge audience={a.key} size="sm" />
-                <span className="min-w-0 flex-1 text-text-primary">
-                  <span className="font-heading font-semibold">{a.label}</span>{' '}
-                  <span className="text-text-secondary">— {a.summary}</span>
-                </span>
-                <AudienceScoreChip audience={a.key} score={result.audienceScores[a.key]?.score ?? null} />
-              </li>
-            ))}
-          </ul>
-        </div>
-        <figure>
-          <AudienceArc scores={result.audienceScores} overall={result.overallScore} className="w-full" />
-          <figcaption className="mt-2 text-center text-xs font-body italic text-text-secondary">Focused visibility across all five channels</figcaption>
-        </figure>
+      <div>
+        <h2 className="text-xs font-heading font-semibold uppercase tracking-wide text-brand-cyan">Overview</h2>
+        <p className="mt-2 whitespace-pre-line text-base font-body leading-relaxed text-text-primary">{narrative.overview}</p>
       </div>
+
+      <AudienceOverview scores={result.audienceScores} overall={result.overallScore} />
 
       {AUDIENCES.map((a) => (
         <AudienceSection

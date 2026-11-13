@@ -80,3 +80,6 @@ export const STATUS_CLS: Record<CheckStatus, string> = {
   fail: 'bg-error/10 text-error',
   na: 'bg-surface-subtle text-text-muted',
 }
+
+// DOM id of an audience's collapsible report section, opened from the arc.
+export const audienceSectionId = (key: AudienceKey) => `aud-${key}`
