@@ -51,6 +51,12 @@ class RV_Blog_Sync_Settings {
 
 		$out['enabled'] = ! empty( $input['enabled'] ) ? 1 : 0;
 
+		$category        = isset( $input['category'] ) ? absint( $input['category'] ) : 0;
+		$out['category'] = ( $category && term_exists( $category, 'category' ) ) ? $category : 0;
+
+		$author        = isset( $input['author'] ) ? absint( $input['author'] ) : 0;
+		$out['author'] = ( $author && user_can( $author, 'edit_posts' ) ) ? $author : 0;
+
 		// Re-schedule if the interval changed.
 		self::reschedule( $out['interval'] );
 
@@ -99,6 +105,8 @@ class RV_Blog_Sync_Settings {
 		$interval = isset( $settings['interval'] ) ? $settings['interval'] : 'hourly';
 		$enabled  = ! empty( $settings['enabled'] );
 		$has_secret = ! empty( $settings['secret'] );
+		$category   = isset( $settings['category'] ) ? (int) $settings['category'] : 0;
+		$author     = isset( $settings['author'] ) ? (int) $settings['author'] : 0;
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Revaltus Blog Sync', 'revaltus-blog-sync' ); ?></h1>
@@ -165,6 +173,43 @@ class RV_Blog_Sync_Settings {
 								<option value="twicedaily" <?php selected( $interval, 'twicedaily' ); ?>><?php esc_html_e( 'Twice daily', 'revaltus-blog-sync' ); ?></option>
 								<option value="daily" <?php selected( $interval, 'daily' ); ?>><?php esc_html_e( 'Daily', 'revaltus-blog-sync' ); ?></option>
 							</select>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rv_category"><?php esc_html_e( 'Category', 'revaltus-blog-sync' ); ?></label></th>
+						<td>
+							<?php
+							wp_dropdown_categories(
+								array(
+									'name'              => RV_BLOG_SYNC_OPTION . '[category]',
+									'id'                => 'rv_category',
+									'selected'          => $category,
+									'hide_empty'        => 0,
+									'hierarchical'      => 1,
+									'show_option_none'  => __( '— WordPress default category —', 'revaltus-blog-sync' ),
+									'option_none_value' => 0,
+								)
+							);
+							?>
+							<p class="description"><?php esc_html_e( 'Assigned to new synced posts, and to synced posts still in the default category. Categories you set by hand in WordPress are kept.', 'revaltus-blog-sync' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rv_author"><?php esc_html_e( 'Author', 'revaltus-blog-sync' ); ?></label></th>
+						<td>
+							<?php
+							wp_dropdown_users(
+								array(
+									'name'              => RV_BLOG_SYNC_OPTION . '[author]',
+									'id'                => 'rv_author',
+									'selected'          => $author,
+									'role__in'          => array( 'administrator', 'editor', 'author' ),
+									'show_option_none'  => __( '— First administrator —', 'revaltus-blog-sync' ),
+									'option_none_value' => 0,
+								)
+							);
+							?>
+							<p class="description"><?php esc_html_e( 'Shown as the author of new synced posts, and set on synced posts that have no author. Authors you change by hand in WordPress are kept.', 'revaltus-blog-sync' ); ?></p>
 						</td>
 					</tr>
 					<tr>

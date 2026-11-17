@@ -100,6 +100,9 @@ class RV_Blog_Sync {
 			if ( $existing
 				&& get_post_meta( $existing->ID, '_rv_content_hash', true ) === $hash
 				&& self::image_ok( $existing->ID, $post ) ) {
+				// Cheap: writes only if the post lacks an author or is still
+				// uncategorized, so changing those settings backfills old posts.
+				self::apply_assignments( $existing->ID, false );
 				$skipped++;
 				continue;
 			}
@@ -185,6 +188,13 @@ class RV_Blog_Sync {
 			'post_excerpt' => wp_slash( isset( $post['excerpt'] ) ? $post['excerpt'] : '' ),
 		);
 
+		if ( ! $existing ) {
+			$author = self::resolve_author();
+			if ( $author ) {
+				$postarr['post_author'] = $author;
+			}
+		}
+
 		if ( ! empty( $post['date_gmt'] ) ) {
 			$postarr['post_date_gmt'] = $post['date_gmt'];
 			$postarr['post_date']     = get_date_from_gmt( $post['date_gmt'] );
@@ -207,6 +217,8 @@ class RV_Blog_Sync {
 		update_post_meta( $post_id, '_rv_synced', 1 );
 		update_post_meta( $post_id, '_rv_source_slug', $slug );
 
+		self::apply_assignments( $post_id, 'created' === $verb );
+
 		// Tags (replace the full set each sync).
 		if ( ! empty( $post['tags'] ) && is_array( $post['tags'] ) ) {
 			wp_set_post_tags( $post_id, array_map( 'sanitize_text_field', $post['tags'] ), false );
@@ -223,6 +235,75 @@ class RV_Blog_Sync {
 		update_post_meta( $post_id, '_rv_content_hash', $hash );
 
 		return $verb;
+	}
+
+	/**
+	 * Author + category from settings. A new post gets both. An existing post is
+	 * only repaired: an author is set when it has none (posts created by WP-cron
+	 * before 1.2.0), and the category only while the post is still in WordPress's
+	 * default category, so a category or author changed by hand in WordPress
+	 * is never overwritten.
+	 */
+	private static function apply_assignments( $post_id, $is_new ) {
+		if ( ! $is_new && 0 === (int) get_post_field( 'post_author', $post_id ) ) {
+			$author = self::resolve_author();
+			if ( $author ) {
+				wp_update_post( array( 'ID' => $post_id, 'post_author' => $author ) );
+			}
+		}
+
+		$category = self::resolve_category();
+		if ( ! $category ) {
+			return;
+		}
+		$default = (int) get_option( 'default_category' );
+		$current = array_map( 'intval', wp_get_post_categories( $post_id ) );
+		if ( $is_new || array() === $current || array( $default ) === $current ) {
+			if ( array( $category ) !== $current ) {
+				wp_set_post_categories( $post_id, array( $category ), false );
+			}
+		}
+	}
+
+	/**
+	 * The configured author if they still exist and can write posts, else the
+	 * lowest-ID administrator. WP-cron runs with no logged-in user, so without
+	 * this a scheduled sync would create posts with no author.
+	 */
+	private static function resolve_author() {
+		static $resolved = null;
+		if ( null !== $resolved ) {
+			return $resolved;
+		}
+		$settings = get_option( RV_BLOG_SYNC_OPTION, array() );
+		$id       = isset( $settings['author'] ) ? (int) $settings['author'] : 0;
+		if ( $id && user_can( $id, 'edit_posts' ) ) {
+			$resolved = $id;
+			return $resolved;
+		}
+		$admins   = get_users(
+			array(
+				'role'    => 'administrator',
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+				'number'  => 1,
+				'fields'  => 'ID',
+			)
+		);
+		$resolved = $admins ? (int) $admins[0] : 0;
+		return $resolved;
+	}
+
+	/**
+	 * The configured category if it still exists; 0 means use WordPress's default.
+	 */
+	private static function resolve_category() {
+		$settings = get_option( RV_BLOG_SYNC_OPTION, array() );
+		$id       = isset( $settings['category'] ) ? (int) $settings['category'] : 0;
+		if ( $id && term_exists( $id, 'category' ) ) {
+			return $id;
+		}
+		return 0;
 	}
 
 	/**

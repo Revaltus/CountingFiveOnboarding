@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Revaltus Blog Sync
  * Description: One-way pull of published blog posts from a Revaltus feed into WordPress. Authoring/editing stays in Revaltus; this site is a publish target.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Revaltus
  * License:     GPL-2.0-or-later
  *
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'RV_BLOG_SYNC_VERSION', '1.1.0' );
+define( 'RV_BLOG_SYNC_VERSION', '1.2.0' );
 define( 'RV_BLOG_SYNC_CRON_HOOK', 'rv_blog_sync_event' );
 define( 'RV_BLOG_SYNC_OPTION', 'rv_blog_sync_settings' );
 define( 'RV_BLOG_SYNC_PATH', plugin_dir_path( __FILE__ ) );

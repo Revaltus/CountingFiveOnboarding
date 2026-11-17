@@ -3,7 +3,7 @@ Contributors: revaltus
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 
 One-way pull of published blog posts from a Revaltus feed into WordPress.
@@ -31,6 +31,8 @@ WordPress (Divi) site PULL those published posts in on a schedule.
    * Feed URL — e.g. https://app.revaltus.com/api/wp-feed/your-site
    * Shared secret — the secret shown when you added the site in Revaltus
    * Sync interval — how often WP-cron pulls (default hourly)
+   * Category / Author — assigned to synced posts (defaults: WordPress's
+     default category; the first administrator)
    * Enabled — check to run scheduled syncs
 5. Click "Sync now" to run an immediate pass and verify.
 
@@ -58,6 +60,14 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   and `_rv_hero_hash` are left in place.
 
 == Changelog ==
+
+= 1.2.0 =
+* New "Category" setting: synced posts go into the chosen category instead of
+  "Uncategorized". Posts still in the default category are moved on the next
+  sync; categories changed by hand in WordPress are kept.
+* New "Author" setting (defaults to the first administrator). Scheduled syncs
+  previously created posts with no author; those are repaired on the next sync.
+  Authors changed by hand in WordPress are kept.
 
 = 1.1.0 =
 * Time-bounded, resumable sync: a run stops starting new work once its wall
