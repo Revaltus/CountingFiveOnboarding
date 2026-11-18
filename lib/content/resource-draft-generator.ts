@@ -16,6 +16,12 @@ import { extractJson } from './extract-json'
 import { deriveImageStyleSuffix } from './visual-style-derivation'
 import { resolveStockPhotos, type ImageRef } from './stock-photo-resolver'
 import {
+  insertBodyImages,
+  parseBodyImagePlacements,
+  sanitizeBodyImagePlacements,
+  type BodyImagePlacement,
+} from './body-images'
+import {
   DRAFT_BRANCH,
   ensureDraftBranch,
   pushEntriesToBranch,
@@ -63,6 +69,9 @@ const MIN_DRAFT_CALL_MS = 45_000
 const MIN_JSON_RETRY_MS = 60_000
 const MIN_ANTI_SLOP_REGEN_MS = 150_000 // a full regeneration = draft + possible JSON retry
 const MIN_SOCIAL_MS = 45_000
+// In-body photos are optional; with less than this left (of the model
+// deadline) only the hero is resolved, so the header image is never the one cut.
+const MIN_BODY_IMAGES_MS = 60_000
 const MIN_AFTER_COMMIT_STEP_MS = 30_000 // MBP impact review / reverse links
 // Default budget for callers that don't pass a deadline.
 export const RESOURCE_DRAFT_DEFAULT_BUDGET_MS = 240_000
@@ -90,6 +99,8 @@ type DraftFrontmatter = {
   hero_image: string | null
   hero_image_query: string | null
   image_alt: string | null
+  // 0-2 in-body photo placements (shape-checked only; sanitized before use).
+  body_images: BodyImagePlacement[]
 }
 
 type DraftResult = { body: string; frontmatter: DraftFrontmatter }
@@ -172,9 +183,12 @@ OUTPUT: Return a JSON object:
     "tags": ["2-4 short topic tags"],
     "hero_image": "kebab-case-filename.jpg — ALWAYS provide one; every post gets a header image",
     "hero_image_query": "3-8 word SUBJECT-only Pexels query (people, setting, activity — no style words) — ALWAYS provide one",
-    "image_alt": "descriptive alt text for the hero image"
+    "image_alt": "descriptive alt text for the hero image",
+    "body_images": [{ "after_heading": "exact text of one H2 in the body", "filename": "kebab-case-filename.jpg", "query": "3-8 word SUBJECT-only Pexels query", "alt": "descriptive alt text" }]
   }
 }
+
+BODY IMAGES: "body_images" is optional, 0-2 items. Add one only where a photo shows what a specific H2 section is about (a setting, document or activity it describes), never as decoration. Pick an H2 whose section opens with a plain paragraph. Never reuse the hero image's subject or repeat a subject. Do not write image markdown in the body; the server places the images.
 
 ${ANTI_SLOP_RULES}
 
@@ -277,6 +291,7 @@ ${args.internalTargets
             hero_image: str(fm.hero_image),
             hero_image_query: str(fm.hero_image_query),
             image_alt: str(fm.image_alt),
+            body_images: parseBodyImagePlacements(fm.body_images),
           },
         },
       }
@@ -667,6 +682,7 @@ export async function generateResourceDraft(
     rfm.meta_description = humanizeDashes(rfm.meta_description)
     rfm.answer_block = humanizeDashes(rfm.answer_block)
     if (rfm.image_alt) rfm.image_alt = humanizeDashes(rfm.image_alt)
+    rfm.body_images = rfm.body_images.map((p) => ({ ...p, alt: humanizeDashes(p.alt) }))
 
     // Hero image via Pexels — non-fatal. Resolution persists an assets row +
     // storage object; we then download the bytes to push into the repo commit.
@@ -682,6 +698,21 @@ export async function generateResourceDraft(
         .slice(0, 6)
         .join(' ')
     }
+    // In-body photos (0-2): sanitized, then dry-run placed so only placements
+    // that will actually land get a Pexels lookup. Optional: skipped (never the
+    // hero) when the run is short on time.
+    let bodyPlacements: BodyImagePlacement[] = []
+    if (fm.body_images.length > 0) {
+      if (canStartDraftStep(modelDeadline, MIN_BODY_IMAGES_MS)) {
+        const clean = sanitizeBodyImagePlacements(fm.body_images, fm.hero_image)
+        bodyPlacements = insertBodyImages(result.body, clean, { heroFilename: fm.hero_image }).inserted
+      } else {
+        console.warn(`[resource-draft] Skipping body images for ${slug} — not enough time left in this run`)
+      }
+    }
+    // The committed body. result.body stays the prose-only draft, which is what
+    // the llms-full.txt index, MBP impact review and critic read.
+    let postBody = result.body
     if (fm.hero_image && fm.hero_image_query) {
       const palette = (job.palette ?? null) as PaletteData | null
       const styleSuffix = deriveImageStyleSuffix(palette, schema.brand)
@@ -689,8 +720,10 @@ export async function generateResourceDraft(
         .from('assets')
         .select('file_name, asset_category, metadata')
         .eq('session_id', idea.session_id)
+      const pageUrl = `/resources/${slug}`
       const imageRefs: ImageRef[] = [
-        { pageUrl: `/resources/${slug}`, filename: fm.hero_image, subjectQuery: fm.hero_image_query, source: 'hero' },
+        { pageUrl, filename: fm.hero_image, subjectQuery: fm.hero_image_query, source: 'hero' },
+        ...bodyPlacements.map((p) => ({ pageUrl, filename: p.filename, subjectQuery: p.query, source: 'body' })),
       ]
       const resolved = await resolveStockPhotos(
         {
@@ -702,19 +735,40 @@ export async function generateResourceDraft(
         },
         supabase
       )
-      if (resolved.length > 0) {
+      const resolvedNames = new Set(resolved.map((r) => r.filename))
+      // Bytes for one resolved image, or null (logged by the caller).
+      const downloadAsset = async (filename: string): Promise<Buffer | null> => {
         const { data: bytes, error: dlErr } = await supabase.storage
           .from('session-assets')
-          .download(`sessions/${idea.session_id}/${fm.hero_image}`)
-        if (bytes && !dlErr) {
-          entries.push({
-            path: `public/content-assets/${fm.hero_image}`,
-            content: Buffer.from(await bytes.arrayBuffer()),
-          })
-          heroImage = fm.hero_image
-        } else {
-          console.warn(`[resource-draft] Hero download failed for ${fm.hero_image}: ${dlErr?.message}`)
-        }
+          .download(`sessions/${idea.session_id}/${filename}`)
+        if (!bytes || dlErr) return null
+        return Buffer.from(await bytes.arrayBuffer())
+      }
+      const heroFile = fm.hero_image
+      const [heroBytes, ...bodyBytes] = await Promise.all([
+        resolvedNames.has(heroFile) ? downloadAsset(heroFile) : Promise.resolve(null),
+        ...bodyPlacements.map((p) =>
+          resolvedNames.has(p.filename) ? downloadAsset(p.filename).catch(() => null) : Promise.resolve(null)
+        ),
+      ])
+      if (heroBytes) {
+        entries.push({ path: `public/content-assets/${heroFile}`, content: heroBytes })
+        heroImage = heroFile
+      } else if (resolvedNames.has(heroFile)) {
+        console.warn(`[resource-draft] Hero download failed for ${heroFile}`)
+      }
+      // Only images that resolved AND downloaded are placed and committed.
+      const ready = bodyPlacements.filter((_, i) => bodyBytes[i])
+      if (ready.length < bodyPlacements.length) {
+        const dropped = bodyPlacements.filter((_, i) => !bodyBytes[i]).map((p) => p.filename)
+        console.warn(`[resource-draft] Dropped body image(s) for ${slug} (not resolved or downloaded): ${dropped.join(', ')}`)
+      }
+      if (ready.length > 0) {
+        bodyPlacements.forEach((p, i) => {
+          const content = bodyBytes[i]
+          if (content) entries.push({ path: `public/content-assets/${p.filename}`, content })
+        })
+        postBody = insertBodyImages(result.body, ready, { heroFilename: heroFile }).body
       }
     }
 
@@ -725,7 +779,7 @@ export async function generateResourceDraft(
 
     const postMarkdown = buildPostMarkdown({
       fm,
-      body: result.body,
+      body: postBody,
       slug,
       date,
       contentType,

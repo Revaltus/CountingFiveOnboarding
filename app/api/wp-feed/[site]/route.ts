@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { resolveSite, verifyBearer } from '@/lib/wordpress/sites'
 import { resolveOrigin } from '@/lib/wordpress/origin'
-import { buildFeed } from '@/lib/wordpress/feed-builder'
+import { buildFeed, pluginSupportsInlineImages } from '@/lib/wordpress/feed-builder'
 
 // GitHub reads require the Node.js runtime; a site with many posts takes dozens
 // of reads, so allow more than the 60s default.
@@ -18,7 +18,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ site: st
   }
 
   try {
-    const posts = await buildFeed(site.github_repo, site.key, resolveOrigin(req))
+    const posts = await buildFeed(site.github_repo, {
+      siteKey: site.key,
+      origin: resolveOrigin(req),
+      inlineImages: pluginSupportsInlineImages(req.headers.get('x-rv-plugin-version')),
+    })
     return NextResponse.json(
       { site: site.key, generated_at: new Date().toISOString(), posts },
       { headers: { 'Cache-Control': 'no-store' } }

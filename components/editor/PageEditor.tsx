@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { splitFile, serializeFile, type Frontmatter } from '@/lib/editor/frontmatter'
 import { contentPathToUrl } from '@/lib/editor/content-paths'
-import { ASSET_ROOT, extractPageImages, localImageFilename } from '@/lib/editor/page-images'
+import { ASSET_ROOT, cleanImageAlt, extractPageImages, localImageFilename, unquoteScalar } from '@/lib/editor/page-images'
 import { extractIconItems, extractIconBlockSummaries, setItemIcon } from '@/lib/editor/icon-items'
 import { extractImageBlocks, setBlockImage, setBlockAlt } from '@/lib/editor/block-images'
 import {
@@ -27,6 +27,7 @@ import {
 } from '@/lib/editor/structured-fields'
 import ImageReplaceControl from './ImageReplaceControl'
 import HeaderImagePicker from './HeaderImagePicker'
+import PostImagesPanel from './PostImagesPanel'
 import IconPickerControl from './IconPickerControl'
 import StructuredContentEditor from './StructuredContentEditor'
 import RichBodyEditor from './RichBodyEditor'
@@ -61,13 +62,12 @@ const PROMOTED_FIELDS = [
 ]
 
 // Blog posts (content/posts/) carry a different frontmatter shape — the
-// header image is handled by HeaderImagePicker, not a text field.
+// featured image and its alt live in the Media tab (PostImagesPanel).
 const POST_PROMOTED_FIELDS = [
   'title',
   'excerpt',
   'date',
   'author',
-  'image_alt',
   'meta_title',
   'meta_description',
   'target_keyword',
@@ -241,13 +241,17 @@ export default function PageEditor({
         </h2>
         {isPost && (
           <div className="mb-4">
-            <HeaderImagePicker
-              sessionId={sessionId}
-              value={parsed.frontmatter.fields['image'] ?? ''}
-              onChange={(filename) =>
-                filename ? setField('image', filename) : removeField('image')
-              }
-            />
+            <p className="text-xs font-body text-text-muted">
+              The featured image and body images are in the{' '}
+              <button
+                type="button"
+                onClick={() => setTab('media')}
+                className="font-heading font-semibold text-brand-cyan hover:underline"
+              >
+                Media tab
+              </button>
+              .
+            </p>
           </div>
         )}
         <div className="grid grid-cols-1 gap-3">
@@ -411,8 +415,21 @@ export default function PageEditor({
       </section>
     ) : null
 
+  const postImagesSection =
+    isPost && parsed.frontmatter ? (
+      <PostImagesPanel
+        sessionId={sessionId}
+        featured={unquoteScalar(parsed.frontmatter.fields['image'] ?? '')}
+        featuredAlt={unquoteScalar(parsed.frontmatter.fields['image_alt'] ?? '')}
+        onFeaturedChange={(filename) => (filename ? setField('image', filename) : removeField('image'))}
+        onFeaturedAltChange={(alt) => setField('image_alt', JSON.stringify(cleanImageAlt(alt)))}
+        body={bodyContent}
+        onBodyChange={setBody}
+      />
+    ) : null
+
   const imagesSection =
-    images.length > 0 ? (
+    !isPost && images.length > 0 ? (
       <section className="bg-surface-card border border-border-default rounded-lg p-4">
         <h2 className="text-sm font-heading font-semibold text-brand-navy mb-3">Images on this page</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -446,7 +463,11 @@ export default function PageEditor({
     ) : null
 
   const hasMedia =
-    !!iconsSection || !!sectionImagesSection || !!teamPhotosSection || !!imagesSection
+    !!postImagesSection ||
+    !!iconsSection ||
+    !!sectionImagesSection ||
+    !!teamPhotosSection ||
+    !!imagesSection
   const showSeo = !!fm && !isSocial
   const showMedia = !isSocial
 
@@ -573,6 +594,7 @@ export default function PageEditor({
           {activeTab === 'media' &&
             (hasMedia ? (
               <>
+                {postImagesSection}
                 {iconsSection}
                 {sectionImagesSection}
                 {teamPhotosSection}

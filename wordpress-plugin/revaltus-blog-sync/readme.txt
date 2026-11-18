@@ -3,7 +3,7 @@ Contributors: revaltus
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 
 One-way pull of published blog posts from a Revaltus feed into WordPress.
@@ -19,6 +19,10 @@ WordPress (Divi) site PULL those published posts in on a schedule.
 * Matches posts by slug. New/updated posts are published. Posts that disappear
   from the feed are set to DRAFT (never deleted).
 * Uploads the hero image into the media library and sets it as the featured image.
+* Uploads body images into the media library and points the post content at
+  them. An image replaced in Revaltus (same filename, new file) is re-uploaded,
+  and the superseded copy is removed. Only images this plugin uploaded are ever
+  removed; media added by WordPress users is never touched.
 * Holds NO GitHub credentials — only the feed URL and a shared bearer secret.
 
 == Installation ==
@@ -46,8 +50,11 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   reports posts "still pending", click "Sync now" again or let WP-cron finish
   them; already-synced posts and images are skipped, so each run gets faster.
   Per-image download timeout is `rv_blog_sync_image_timeout` (default 15s).
+* A body image that fails to download is left out of the post for that run and
+  the post is retried on the next run.
 * Post HTML from the feed uses only tags within WordPress's `wp_kses_post`
-  allowlist (headings, paragraphs, lists, links, bold/italic, code).
+  allowlist (headings, paragraphs, lists, links, bold/italic, code, figures and
+  images).
 * SEO meta title/description are written for both Yoast and Rank Math; use the
   `rv_blog_sync_seo_meta_keys` filter to map to another SEO plugin.
 
@@ -57,9 +64,15 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   Revaltus (Admin → WordPress Sites) — the feed then 404s and the plugin no-ops.
 * Remove: deactivate + delete the plugin. Synced posts remain in WordPress in
   whatever state they were last in. Post meta `_rv_synced`, `_rv_source_slug`,
-  and `_rv_hero_hash` are left in place.
+  `_rv_hero_hash`, `_rv_hero_sha` and `_rv_inline_map` are left in place.
 
 == Changelog ==
+
+= 1.3.0 =
+* Body images sync into the media library; replaced images are detected;
+  superseded synced images are cleaned up.
+* The first sync after upgrading updates every synced post once (the content
+  hash now includes image versions).
 
 = 1.2.0 =
 * New "Category" setting: synced posts go into the chosen category instead of

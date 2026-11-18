@@ -31,6 +31,9 @@ export type HeroImage = {
   requires_auth: boolean // true → WP plugin must send the bearer header to fetch
   alt: string | null
   filename: string
+  // Git blob sha of the repo file (null for external URLs). Lets the plugin
+  // detect an image replaced in place under the same filename.
+  sha: string | null
 }
 
 // Only these repo roots may be proxied. Hero images live under content-assets.

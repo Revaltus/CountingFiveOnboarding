@@ -9,7 +9,8 @@
 // ---------------------------------------------------------------------------
 
 import { splitFile, type Frontmatter } from '@/lib/editor/frontmatter'
-import { markdownToHtml } from '@/lib/content/divi/markdown'
+import { markdownToHtml, type ImageResolver } from '@/lib/content/divi/markdown'
+import { localImageFilename } from '@/lib/editor/page-images'
 import { listTree, readTextBlobs, MAIN_BRANCH } from '@/lib/github/repo-files'
 import { assetUrlFor, type HeroImage } from './assets'
 
@@ -26,8 +27,33 @@ export type WpFeedPost = {
   meta_title: string
   meta_description: string
   hero_image: HeroImage | null
-  inline_images: HeroImage[] // reserved; empty for current generator output
+  inline_images: HeroImage[] // one per distinct local body image; [] for pre-1.3.0 plugins
 }
+
+export type FeedOptions = {
+  siteKey: string
+  origin: string
+  // filename → git blob sha for public/content-assets/
+  assetShas?: ReadonlyMap<string, string>
+  // Body images reference auth-only proxy URLs; only plugins >= 1.3.0 rewrite
+  // them to WP media URLs, so older plugins get bodies without images.
+  inlineImages?: boolean
+}
+
+// Plugins send X-RV-Plugin-Version from 1.3.0 on; absent means older.
+export const INLINE_IMAGES_MIN_PLUGIN = [1, 3, 0] as const
+
+export function pluginSupportsInlineImages(version: string | null): boolean {
+  const m = (version ?? '').trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/)
+  if (!m) return false
+  const v = [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)]
+  for (let i = 0; i < 3; i++) {
+    if (v[i] !== INLINE_IMAGES_MIN_PLUGIN[i]) return v[i] > INLINE_IMAGES_MIN_PLUGIN[i]
+  }
+  return true
+}
+
+const ASSETS_PREFIX = 'public/content-assets/'
 
 const POSTS_PREFIX = 'content/posts/'
 // buildPostMarkdown appends an inline "## SEO & AIO Metadata" block to the body;
@@ -102,16 +128,41 @@ function slugFromPath(path: string): string {
   return path.replace(POSTS_PREFIX, '').replace(/\.md$/, '')
 }
 
-function heroImage(fm: Frontmatter | null, siteKey: string, origin: string): HeroImage | null {
-  const image = scalar(fm, 'image')
+function heroImage(fm: Frontmatter | null, opts: FeedOptions): HeroImage | null {
+  const image = scalar(fm, 'image') || scalar(fm, 'hero_image')
   if (!image) return null
-  const alt = scalar(fm, 'image_alt') || null
+  const alt = scalar(fm, 'image_alt') || scalar(fm, 'hero_image_alt') || null
   // An absolute URL (e.g. a Pexels CDN link) is publicly fetchable — pass it
   // through verbatim. A bare filename is a private repo asset → proxy URL.
   if (/^https?:\/\//i.test(image)) {
-    return { url: image, requires_auth: false, alt, filename: image.split('/').pop() ?? image }
+    return { url: image, requires_auth: false, alt, filename: image.split('/').pop() ?? image, sha: null }
   }
-  return { url: assetUrlFor(origin, siteKey, image), requires_auth: true, alt, filename: image }
+  const filename = localImageFilename(image) ?? image
+  return {
+    url: assetUrlFor(opts.origin, opts.siteKey, filename),
+    requires_auth: true,
+    alt,
+    filename,
+    sha: opts.assetShas?.get(filename) ?? null,
+  }
+}
+
+// Body images: local filenames become proxy URLs tagged with data-rv-ref (the
+// plugin swaps them for WP media URLs); absolute URLs pass through; a local
+// file missing from the repo is dropped rather than shipped as a broken image.
+function bodyImageResolver(opts: FeedOptions, collected: Map<string, HeroImage>): ImageResolver {
+  return (src, alt) => {
+    if (/^https?:\/\//i.test(src)) return { src }
+    const filename = localImageFilename(src)
+    if (!filename || !opts.inlineImages) return null
+    const sha = opts.assetShas?.get(filename) ?? null
+    if (opts.assetShas && !sha) return null
+    const url = assetUrlFor(opts.origin, opts.siteKey, filename)
+    if (!collected.has(filename)) {
+      collected.set(filename, { url, requires_auth: true, alt: alt || null, filename, sha })
+    }
+    return { src: url, attrs: { 'data-rv-ref': filename } }
+  }
 }
 
 // Map one repo post file to the feed shape. Pure (no network) — unit-tested.
@@ -120,17 +171,21 @@ function heroImage(fm: Frontmatter | null, siteKey: string, origin: string): Her
 export function postFromRepoFile(
   path: string,
   content: string,
-  opts: { siteKey: string; origin: string }
+  opts: FeedOptions
 ): WpFeedPost | null {
   const { frontmatter, body } = splitFile(content)
   if (scalar(frontmatter, 'draft').toLowerCase() === 'true') return null
   if (scalar(frontmatter, 'status').toLowerCase() === 'draft') return null
 
   const slug = scalar(frontmatter, 'slug') || slugFromPath(path)
+  const inline = new Map<string, HeroImage>()
+  const html = markdownToHtml(stripInlineSeoSection(body), {
+    resolveImage: bodyImageResolver(opts, inline),
+  })
   return {
     slug,
     title: scalar(frontmatter, 'title') || slug,
-    html: markdownToHtml(stripInlineSeoSection(body)),
+    html,
     excerpt: scalar(frontmatter, 'excerpt'),
     date_gmt: normalizeDate(frontmatter?.fields['date'] ?? ''),
     tags: parseTags(frontmatter),
@@ -139,8 +194,8 @@ export function postFromRepoFile(
     canonical_url: scalar(frontmatter, 'canonical_url') || `/resources/${slug}`,
     meta_title: scalar(frontmatter, 'meta_title'),
     meta_description: scalar(frontmatter, 'meta_description'),
-    hero_image: heroImage(frontmatter, opts.siteKey, opts.origin),
-    inline_images: [],
+    hero_image: heroImage(frontmatter, opts),
+    inline_images: [...inline.values()],
   }
 }
 
@@ -149,17 +204,24 @@ export function postFromRepoFile(
 // through a single bounded pool to stay under GitHub's secondary rate limit.
 export async function buildFeed(
   githubRepo: string,
-  siteKey: string,
-  origin: string
+  opts: Omit<FeedOptions, 'assetShas'>
 ): Promise<WpFeedPost[]> {
   const tree = await listTree(githubRepo, MAIN_BRANCH, POSTS_PREFIX)
   const entries = tree.filter(
     (e) => e.type === 'blob' && e.path.startsWith(POSTS_PREFIX) && e.path.endsWith('.md')
   )
 
+  // One listing for the whole feed: shas let WP detect an in-place replace.
+  const assetShas = new Map<string, string>()
+  for (const e of await listTree(githubRepo, MAIN_BRANCH, ASSETS_PREFIX)) {
+    if (e.type !== 'blob' || !e.path.startsWith(ASSETS_PREFIX)) continue
+    const name = e.path.slice(ASSETS_PREFIX.length)
+    if (!name.includes('/')) assetShas.set(name, e.sha)
+  }
+
   const posts: WpFeedPost[] = []
   for (const f of await readTextBlobs(githubRepo, entries)) {
-    const post = postFromRepoFile(f.path, f.content, { siteKey, origin })
+    const post = postFromRepoFile(f.path, f.content, { ...opts, assetShas })
     if (post) posts.push(post)
   }
   return posts

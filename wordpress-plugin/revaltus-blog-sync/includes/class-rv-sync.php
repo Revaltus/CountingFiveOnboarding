@@ -8,7 +8,8 @@
  * Time-bounded + resumable: a single run stops starting new work once its wall
  * budget is spent (default 40s), so it never trips a host's gateway timeout on a
  * large repo. Unchanged posts are skipped by content hash and already-fetched
- * hero images by hash, so repeat runs (WP-cron or "Sync now") converge cheaply.
+ * hero/body images by sha, so repeat runs (WP-cron or "Sync now") converge
+ * cheaply.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -44,7 +45,12 @@ class RV_Blog_Sync {
 			$feed_url,
 			array(
 				'timeout' => 30,
-				'headers' => array( 'Authorization' => 'Bearer ' . $secret ),
+				'headers' => array(
+					'Authorization'       => 'Bearer ' . $secret,
+					// From 1.3.0 the feed embeds body images (<img data-rv-ref>);
+					// older plugins are sent HTML without them.
+					'X-RV-Plugin-Version' => RV_BLOG_SYNC_VERSION,
+				),
 			)
 		);
 		if ( is_wp_error( $response ) ) {
@@ -94,8 +100,8 @@ class RV_Blog_Sync {
 			$existing = self::find_existing( $slug );
 			$hash     = self::content_hash( $post );
 
-			// Fast path: content unchanged AND the hero image is already attached
-			// (or there is none). Cheap DB reads only — safe to keep doing even
+			// Fast path: content unchanged AND the hero and every body image are
+			// already attached (or there are none). Cheap DB reads only — safe to keep doing even
 			// after the budget is spent, so a converged site re-syncs instantly.
 			if ( $existing
 				&& get_post_meta( $existing->ID, '_rv_content_hash', true ) === $hash
@@ -135,11 +141,18 @@ class RV_Blog_Sync {
 
 	/**
 	 * Stable hash of the feed fields we write, so an unchanged post can be
-	 * skipped without touching the DB or re-sideloading its image.
+	 * skipped without touching the DB or re-sideloading its images. Image shas
+	 * are included so a file replaced in place (same filename, new bytes)
+	 * still changes the hash.
 	 */
 	private static function content_hash( $post ) {
-		$hero = isset( $post['hero_image']['url'] ) ? $post['hero_image']['url'] : '';
-		$tags = ( isset( $post['tags'] ) && is_array( $post['tags'] ) ) ? implode( ',', $post['tags'] ) : '';
+		$hero     = isset( $post['hero_image']['url'] ) ? $post['hero_image']['url'] : '';
+		$hero_sha = isset( $post['hero_image']['sha'] ) ? (string) $post['hero_image']['sha'] : '';
+		$tags     = ( isset( $post['tags'] ) && is_array( $post['tags'] ) ) ? implode( ',', $post['tags'] ) : '';
+		$inline   = array();
+		foreach ( self::inline_images( $post ) as $image ) {
+			$inline[] = ( isset( $image['filename'] ) ? $image['filename'] : '' ) . ':' . ( isset( $image['sha'] ) ? $image['sha'] : '' );
+		}
 		return md5(
 			implode(
 				'|',
@@ -152,29 +165,56 @@ class RV_Blog_Sync {
 					isset( $post['meta_title'] ) ? $post['meta_title'] : '',
 					isset( $post['meta_description'] ) ? $post['meta_description'] : '',
 					$hero,
+					$hero_sha,
+					implode( ',', $inline ),
 				)
 			)
 		);
 	}
 
 	/**
-	 * True when the post needs no image work: it has no hero, or it already has
-	 * a featured image. A hero that failed to attach last run returns false so
-	 * it is retried.
+	 * True when the post needs no image work: its hero (if any) is the featured
+	 * image and every body image is attached at its current sha. An image that
+	 * failed to attach last run returns false so it is retried.
 	 */
 	private static function image_ok( $post_id, $post ) {
-		if ( empty( $post['hero_image']['url'] ) ) {
-			return true;
+		if ( ! empty( $post['hero_image']['url'] ) && ! get_post_thumbnail_id( $post_id ) ) {
+			return false;
 		}
-		return (bool) get_post_thumbnail_id( $post_id );
+		return RV_Blog_Sync_Media::inline_complete( $post_id, self::inline_images( $post ) );
+	}
+
+	/**
+	 * The post's `inline_images` list from the feed (empty for older servers).
+	 */
+	private static function inline_images( $post ) {
+		return ( isset( $post['inline_images'] ) && is_array( $post['inline_images'] ) ) ? $post['inline_images'] : array();
 	}
 
 	/**
 	 * Insert or update a single post, matched by slug. Returns 'created' or
 	 * 'updated'. Stamps the content hash on success so the next run can skip it.
+	 *
+	 * Body images are sideloaded before the content is saved, so the
+	 * bearer-only proxy URLs in the feed HTML never reach stored content. An
+	 * existing post sideloads first, then saves once. A new post with body
+	 * images needs an id to parent them to, so it is inserted as a draft
+	 * without them, then published with the rewritten HTML.
 	 */
 	private static function upsert_post( $slug, $post, $secret, $hash ) {
 		$existing = self::find_existing( $slug );
+		$html     = isset( $post['html'] ) ? (string) $post['html'] : '';
+		$images   = self::inline_images( $post );
+		$two_step = ! $existing && false !== strpos( $html, 'data-rv-ref' );
+
+		if ( $existing ) {
+			$content = RV_Blog_Sync_Media::rewrite_html( $html, RV_Blog_Sync_Media::attach_inline( $existing->ID, $images, $secret ) );
+		} else {
+			$content = RV_Blog_Sync_Media::rewrite_html( $html, array() );
+		}
+		if ( null === $content ) {
+			return 'error'; // Could not strip proxy URLs safely; retried next run.
+		}
 
 		$postarr = array(
 			'post_type'    => 'post',
@@ -184,7 +224,7 @@ class RV_Blog_Sync {
 			// special unfiltered handling is needed. wp_slash survives the
 			// wp_unslash that wp_insert_post applies internally.
 			'post_title'   => wp_slash( isset( $post['title'] ) ? $post['title'] : $slug ),
-			'post_content' => wp_slash( isset( $post['html'] ) ? $post['html'] : '' ),
+			'post_content' => wp_slash( $content ),
 			'post_excerpt' => wp_slash( isset( $post['excerpt'] ) ? $post['excerpt'] : '' ),
 		);
 
@@ -205,6 +245,11 @@ class RV_Blog_Sync {
 			$result = wp_update_post( $postarr, true );
 			$verb = 'updated';
 		} else {
+			if ( $two_step ) {
+				// Publish hooks (feeds, newsletters, social) should only ever
+				// see the final content, so the first insert is a draft.
+				$postarr['post_status'] = 'draft';
+			}
 			$result = wp_insert_post( $postarr, true );
 			$verb = 'created';
 		}
@@ -214,8 +259,24 @@ class RV_Blog_Sync {
 		}
 		$post_id = is_object( $result ) ? $result->ID : (int) $result;
 
+		// Set before any slow work so an interrupted run finds this post again
+		// (find_existing matches drafts) instead of creating a duplicate.
 		update_post_meta( $post_id, '_rv_synced', 1 );
 		update_post_meta( $post_id, '_rv_source_slug', $slug );
+
+		if ( $two_step ) {
+			$content = RV_Blog_Sync_Media::rewrite_html( $html, RV_Blog_Sync_Media::attach_inline( $post_id, $images, $secret ) );
+			if ( null === $content ) {
+				return 'error'; // Left as an un-hashed draft; retried next run.
+			}
+			$postarr['ID']           = $post_id;
+			$postarr['post_status']  = 'publish';
+			$postarr['post_content'] = wp_slash( $content );
+			$result = wp_update_post( $postarr, true );
+			if ( is_wp_error( $result ) || ! $result ) {
+				return 'error';
+			}
+		}
 
 		self::apply_assignments( $post_id, 'created' === $verb );
 
@@ -231,8 +292,13 @@ class RV_Blog_Sync {
 		}
 
 		// Stamp last so a mid-run failure above leaves the post un-hashed and it
-		// is retried next run rather than skipped.
-		update_post_meta( $post_id, '_rv_content_hash', $hash );
+		// is retried next run rather than skipped. A body image that failed to
+		// sideload was left out of the content; skipping the stamp retries it.
+		if ( RV_Blog_Sync_Media::inline_complete( $post_id, $images ) ) {
+			update_post_meta( $post_id, '_rv_content_hash', $hash );
+		} else {
+			delete_post_meta( $post_id, '_rv_content_hash' );
+		}
 
 		return $verb;
 	}

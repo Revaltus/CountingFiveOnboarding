@@ -87,6 +87,17 @@ describe('markdown → html', () => {
   it('drops icon: noise lines', () => {
     expect(markdownToHtml('icon: TrendingUp\nReal copy.')).not.toContain('TrendingUp')
   })
+
+  it('renders standalone images as figures and drops ones it cannot serve', () => {
+    expect(markdownToHtml('![A "chart"](https://x.com/a.jpg)')).toBe(
+      '<figure><img src="https://x.com/a.jpg" alt="A &quot;chart&quot;"></figure>'
+    )
+    expect(markdownToHtml('Intro\n\n![Local](books.jpg)\n\nOutro')).toBe('<p>Intro</p>\n<p>Outro</p>')
+    expect(markdownToHtml('![x](javascript:alert(1))')).not.toContain('javascript')
+    expect(
+      markdownToHtml('![Local](books.jpg)', { resolveImage: (src) => ({ src: '/m/' + src, attrs: { 'data-k': 'v' } }) })
+    ).toBe('<figure><img src="/m/books.jpg" alt="Local" data-k="v"></figure>')
+  })
 })
 
 describe('section parsing', () => {

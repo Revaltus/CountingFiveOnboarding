@@ -70,8 +70,11 @@ npx tsc --noEmit   # clean compile confirms nothing else depended on it
   scope (handled natively or by the Divi bridge).
 - **One-way**: git is the source of truth; edits made inside WordPress are
   overwritten on the next sync.
-- **Hero image only**: current generator output has no inline body images. If
-  inline `![]()` images referencing repo assets are ever added, extend
-  `markdownToHtml` (module-local copy) and populate `inline_images`.
+- **Images**: the featured image (`hero_image`) and standalone body images
+  (`![alt](file.jpg)` lines → `<figure><img data-rv-ref>` + `inline_images`)
+  both carry the repo blob `sha`, so a file replaced in place re-syncs. Body
+  images are only emitted to plugins >= 1.3.0 (`X-RV-Plugin-Version` header);
+  older plugins get bodies without them, because they would store the auth-only
+  proxy URLs. The plugin sideloads each image and rewrites `src` to the WP media URL.
 - `github_repo` is duplicated from Supabase into the site row (intentional, for
   isolation) — keep it in sync if a repo is renamed.

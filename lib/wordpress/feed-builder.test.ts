@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { postFromRepoFile } from './feed-builder'
+import { pluginSupportsInlineImages, postFromRepoFile } from './feed-builder'
 import { isAllowedAssetPath, assetUrlFor } from './assets'
 import { verifyBearer, generateSiteSecret, type WordpressSite } from './sites'
 
@@ -85,8 +85,50 @@ describe('postFromRepoFile', () => {
       requires_auth: true,
       alt: 'A dashboard of business metrics',
       filename: 'kpis-header.jpg',
+      sha: null,
     })
     expect(post?.inline_images).toEqual([])
+  })
+
+  it('carries the repo blob sha on the hero so an in-place replace changes it', () => {
+    const shas = new Map([['kpis-header.jpg', 'abc123']])
+    const post = postFromRepoFile('content/posts/the-new-kpis.md', POST, { ...OPTS, assetShas: shas })
+    expect(post?.hero_image?.sha).toBe('abc123')
+  })
+
+  describe('body images', () => {
+    const withBody = POST.replace(
+      '- Second point\n',
+      '- Second point\n\n![Team reviewing books](books.jpg)\n\n![Again](books.jpg)\n\n![Ext](https://images.pexels.com/e.jpg)\n\n![Gone](missing.jpg)\n'
+    )
+    const shas = new Map([
+      ['kpis-header.jpg', 'h1'],
+      ['books.jpg', 'b1'],
+    ])
+
+    it('rewrites local images to tagged proxy URLs and lists them once', () => {
+      const post = postFromRepoFile('content/posts/x.md', withBody, {
+        ...OPTS,
+        assetShas: shas,
+        inlineImages: true,
+      })
+      const proxy = 'https://app.example.com/api/wp-feed/acmetax/asset?path=public%2Fcontent-assets%2Fbooks.jpg'
+      expect(post?.html).toContain(
+        `<figure><img src="${proxy}" alt="Team reviewing books" data-rv-ref="books.jpg"></figure>`
+      )
+      expect(post?.html).toContain('<figure><img src="https://images.pexels.com/e.jpg" alt="Ext"></figure>')
+      expect(post?.html).not.toContain('missing.jpg')
+      expect(post?.inline_images).toEqual([
+        { url: proxy, requires_auth: true, alt: 'Team reviewing books', filename: 'books.jpg', sha: 'b1' },
+      ])
+    })
+
+    it('omits local body images for plugins that cannot rewrite them', () => {
+      const post = postFromRepoFile('content/posts/x.md', withBody, { ...OPTS, assetShas: shas })
+      expect(post?.html).not.toContain('books.jpg')
+      expect(post?.html).not.toContain('api/wp-feed')
+      expect(post?.inline_images).toEqual([])
+    })
   })
 
   it('passes an absolute hero URL through without auth', () => {
@@ -118,6 +160,18 @@ describe('postFromRepoFile', () => {
   it('skips a post flagged draft in frontmatter', () => {
     const draft = POST.replace('content_type: blog', 'content_type: blog\ndraft: true')
     expect(postFromRepoFile('content/posts/x.md', draft, OPTS)).toBeNull()
+  })
+})
+
+describe('pluginSupportsInlineImages', () => {
+  it('gates on 1.3.0', () => {
+    expect(pluginSupportsInlineImages(null)).toBe(false)
+    expect(pluginSupportsInlineImages('1.2.0')).toBe(false)
+    expect(pluginSupportsInlineImages('1.3.0')).toBe(true)
+    expect(pluginSupportsInlineImages('1.3')).toBe(true)
+    expect(pluginSupportsInlineImages('1.10.0')).toBe(true)
+    expect(pluginSupportsInlineImages('2.0.0')).toBe(true)
+    expect(pluginSupportsInlineImages('junk')).toBe(false)
   })
 })
 
