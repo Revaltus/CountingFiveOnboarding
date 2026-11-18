@@ -40,6 +40,13 @@ const nextConfig: NextConfig = {
       '/api/edit/\\[id\\]/design/chat': [...lightningcss, ...renderer],
       // Divi export sitemap: resvg's native binding is require()d by platform
       // name, and the bundled fonts are read by path (PNG + PDF).
+      // WP plugin self-update: version/readme are read at request time and the
+      // committed zip is served as the update package.
+      '/api/wp-feed/\\[site\\]/plugin': [
+        './wordpress-plugin/revaltus-blog-sync/revaltus-blog-sync.php',
+        './wordpress-plugin/revaltus-blog-sync/readme.txt',
+      ],
+      '/api/wp-feed/\\[site\\]/plugin/download': ['./wordpress-plugin/revaltus-blog-sync.zip'],
       '/api/edit/\\[id\\]/export-divi': [
         './node_modules/@resvg/resvg-js/**',
         './node_modules/@resvg/resvg-js-linux-x64-gnu/**',

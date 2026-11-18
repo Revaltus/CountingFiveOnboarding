@@ -24,6 +24,8 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   and the superseded copy is removed. Only images this plugin uploaded are ever
   removed; media added by WordPress users is never touched.
 * Holds NO GitHub credentials — only the feed URL and a shared bearer secret.
+* Updates itself through WordPress's normal update screen: new releases come
+  from the same Revaltus app as the feed (needs the Feed URL + secret set).
 
 == Installation ==
 
@@ -71,6 +73,8 @@ WordPress (Divi) site PULL those published posts in on a schedule.
 = 1.3.0 =
 * Body images sync into the media library; replaced images are detected;
   superseded synced images are cleaned up.
+* Update notices: WordPress now shows when a new version is available, with
+  one-click update from Plugins, fetched from Revaltus with this site's secret.
 * The first sync after upgrading updates every synced post once (the content
   hash now includes image versions).
 

@@ -4,6 +4,8 @@
  * Description: One-way pull of published blog posts from a Revaltus feed into WordPress. Authoring/editing stays in Revaltus; this site is a publish target.
  * Version:     1.3.0
  * Author:      Revaltus
+ * Update URI:  https://revaltus.com/plugins/revaltus-blog-sync
+ * Requires at least: 5.8
  * License:     GPL-2.0-or-later
  *
  * Isolated, removable bridge for the WordPress transition period. Polls an
@@ -19,10 +21,15 @@ define( 'RV_BLOG_SYNC_VERSION', '1.3.0' );
 define( 'RV_BLOG_SYNC_CRON_HOOK', 'rv_blog_sync_event' );
 define( 'RV_BLOG_SYNC_OPTION', 'rv_blog_sync_settings' );
 define( 'RV_BLOG_SYNC_PATH', plugin_dir_path( __FILE__ ) );
+define( 'RV_BLOG_SYNC_FILE', __FILE__ );
 
 require_once RV_BLOG_SYNC_PATH . 'includes/class-rv-settings.php';
 require_once RV_BLOG_SYNC_PATH . 'includes/class-rv-media.php';
 require_once RV_BLOG_SYNC_PATH . 'includes/class-rv-sync.php';
+require_once RV_BLOG_SYNC_PATH . 'includes/class-rv-updater.php';
+
+// Update notices + one-click updates from the Revaltus app (see the class).
+RV_Blog_Sync_Updater::init();
 
 /**
  * Allow the sync interval to be tuned; defaults to hourly. A custom interval is
