@@ -123,7 +123,7 @@ export default function PostImagesPanel({
             >
               {anchors.map((h, i) => (
                 <option key={`${i}-${h}`} value={String(i)}>
-                  Under “{h}”
+                  Under “{h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '')}”
                 </option>
               ))}
               <option value="end">At the end of the post</option>
