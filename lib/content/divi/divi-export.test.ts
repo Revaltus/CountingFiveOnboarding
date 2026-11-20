@@ -84,6 +84,62 @@ describe('markdown → html', () => {
     expect(html).toContain('<a href="/x">a link</a>')
     expect(html).toContain('<li>one</li>')
   })
+  describe('tables', () => {
+    const TABLE = ['| Factor | Leasing | Buying |', '|---|:---:|---:|', '| Upfront cost | **Lower** | Higher |', '| Monthly | Lower | Higher |'].join('\n')
+
+    it('renders a GFM table with thead/tbody in a scroll wrapper', () => {
+      const html = markdownToHtml(TABLE)
+      expect(html.startsWith('<div class="rv-table-wrap"><table class="rv-table"><thead><tr><th>Factor</th>')).toBe(true)
+      expect(html).toContain('<tbody>')
+      expect(html).toContain('<td>Upfront cost</td>')
+      expect(html).toContain('<strong>Lower</strong>')
+      expect(html).not.toContain('|')
+      expect(html).not.toContain('<p>')
+    })
+
+    it('maps delimiter colons to text-align', () => {
+      const html = markdownToHtml(TABLE)
+      expect(html).toContain('<th style="text-align:center">Leasing</th>')
+      expect(html).toContain('<td style="text-align:right">Higher</td>')
+      expect(html).toContain('<th>Factor</th>')
+    })
+
+    it('pads short rows and trims long ones to the header width', () => {
+      const html = markdownToHtml('| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |')
+      expect(html).toContain('<tr><td>1</td><td></td></tr>')
+      expect(html).toContain('<tr><td>1</td><td>2</td></tr>')
+      expect(html).not.toContain('3')
+    })
+
+    it('keeps escaped pipes as cell text and sanitizes cell links', () => {
+      const html = markdownToHtml('| a | b |\n|---|---|\n| x \\| y | [bad](javascript:alert(1)) [ok](/ok) |')
+      expect(html).toContain('<td>x | y</td>')
+      expect(html).not.toContain('javascript')
+      expect(html).toContain('<a href="/ok">ok</a>')
+    })
+
+    it('leaves pipe lines without a delimiter row as prose', () => {
+      expect(markdownToHtml('| just | pipes |')).toBe('<p>| just | pipes |</p>')
+      expect(markdownToHtml('| a | b |\n|---|')).not.toContain('<table')
+    })
+
+    it('starts a table straight after a paragraph and resumes prose after it', () => {
+      const html = markdownToHtml(`Compare:\n${TABLE}\nAfter.`)
+      expect(html.split('\n')[0]).toBe('<p>Compare:</p>')
+      expect(html).toContain('<table')
+      expect(html.endsWith('<p>After.</p>')).toBe(true)
+    })
+  })
+
+  it('renders ordered lists, blockquotes and horizontal rules', () => {
+    expect(markdownToHtml('1. one\n2. two')).toBe('<ol>\n<li>one</li>\n<li>two</li>\n</ol>')
+    expect(markdownToHtml('- a\n1. b')).toBe('<ul>\n<li>a</li>\n</ul>\n<ol>\n<li>b</li>\n</ol>')
+    expect(markdownToHtml('> Quoted **line**\n> continues')).toBe(
+      '<blockquote><p>Quoted <strong>line</strong> continues</p></blockquote>'
+    )
+    expect(markdownToHtml('Above\n\n---\n\nBelow')).toBe('<p>Above</p>\n<hr>\n<p>Below</p>')
+  })
+
   it('drops icon: noise lines', () => {
     expect(markdownToHtml('icon: TrendingUp\nReal copy.')).not.toContain('TrendingUp')
   })

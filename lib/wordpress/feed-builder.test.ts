@@ -78,6 +78,14 @@ describe('postFromRepoFile', () => {
     expect(post?.html).not.toContain('A guide to modern KPIs')
   })
 
+  it('converts a markdown table into a real HTML table', () => {
+    const withTable = POST.replace('- Second point\n', '- Second point\n\n| Factor | Leasing |\n|---|---|\n| Cost | Lower |\n')
+    const post = postFromRepoFile('content/posts/the-new-kpis.md', withTable, OPTS)
+    expect(post?.html).toContain('<table class="rv-table">')
+    expect(post?.html).toContain('<td>Lower</td>')
+    expect(post?.html).not.toContain('|---|')
+  })
+
   it('emits an authenticated proxy URL for a bare hero filename', () => {
     const post = postFromRepoFile('content/posts/the-new-kpis.md', POST, OPTS)
     expect(post?.hero_image).toEqual({

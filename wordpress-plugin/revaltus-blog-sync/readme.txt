@@ -3,7 +3,7 @@ Contributors: revaltus
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 
 One-way pull of published blog posts from a Revaltus feed into WordPress.
@@ -55,8 +55,10 @@ WordPress (Divi) site PULL those published posts in on a schedule.
 * A body image that fails to download is left out of the post for that run and
   the post is retried on the next run.
 * Post HTML from the feed uses only tags within WordPress's `wp_kses_post`
-  allowlist (headings, paragraphs, lists, links, bold/italic, code, figures and
-  images).
+  allowlist (headings, paragraphs, lists, tables, blockquotes, rules, links,
+  bold/italic, code, figures and images).
+* Tables get a small scoped stylesheet (`assets/rv-content.css`), loaded only on
+  synced single posts.
 * SEO meta title/description are written for both Yoast and Rank Math; use the
   `rv_blog_sync_seo_meta_keys` filter to map to another SEO plugin.
 
@@ -69,6 +71,12 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   `_rv_hero_hash`, `_rv_hero_sha` and `_rv_inline_map` are left in place.
 
 == Changelog ==
+
+= 1.4.0 =
+* Tables in synced posts are styled: header row, row striping, borders, and
+  horizontal scrolling on phones. The stylesheet loads only on synced posts.
+* Tables now arrive as real HTML tables (a Revaltus feed fix; posts update on
+  the next sync even before this plugin update).
 
 = 1.3.0 =
 * Body images sync into the media library; replaced images are detected;

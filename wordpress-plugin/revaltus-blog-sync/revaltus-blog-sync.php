@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Revaltus Blog Sync
  * Description: One-way pull of published blog posts from a Revaltus feed into WordPress. Authoring/editing stays in Revaltus; this site is a publish target.
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      Revaltus
  * Update URI:  https://revaltus.com/plugins/revaltus-blog-sync
  * Requires at least: 5.8
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'RV_BLOG_SYNC_VERSION', '1.3.0' );
+define( 'RV_BLOG_SYNC_VERSION', '1.4.0' );
 define( 'RV_BLOG_SYNC_CRON_HOOK', 'rv_blog_sync_event' );
 define( 'RV_BLOG_SYNC_OPTION', 'rv_blog_sync_settings' );
 define( 'RV_BLOG_SYNC_PATH', plugin_dir_path( __FILE__ ) );
@@ -75,3 +75,20 @@ add_action( RV_BLOG_SYNC_CRON_HOOK, array( 'RV_Blog_Sync', 'run' ) );
 add_action( 'admin_menu', array( 'RV_Blog_Sync_Settings', 'register_page' ) );
 add_action( 'admin_init', array( 'RV_Blog_Sync_Settings', 'register_settings' ) );
 add_action( 'admin_post_rv_blog_sync_now', array( 'RV_Blog_Sync_Settings', 'handle_sync_now' ) );
+
+/**
+ * Front-end styles for feed markup (tables) — only on synced single posts, so
+ * nothing else on the site picks up an extra request.
+ */
+function rv_blog_sync_enqueue_content_styles() {
+	if ( ! is_singular( 'post' ) || ! get_post_meta( get_queried_object_id(), '_rv_synced', true ) ) {
+		return;
+	}
+	wp_enqueue_style(
+		'rv-blog-sync-content',
+		plugins_url( 'assets/rv-content.css', RV_BLOG_SYNC_FILE ),
+		array(),
+		RV_BLOG_SYNC_VERSION
+	);
+}
+add_action( 'wp_enqueue_scripts', 'rv_blog_sync_enqueue_content_styles' );

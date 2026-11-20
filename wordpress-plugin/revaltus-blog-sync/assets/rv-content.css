@@ -1,0 +1,49 @@
+/*
+ * Revaltus Blog Sync: styles for markup the feed emits inside synced posts.
+ * Scoped to our own classes and colour-neutral (currentColor / translucent
+ * fills) so it sits on top of any theme. Divi's own table rules are overridden
+ * by the doubled class selector.
+ */
+.rv-table-wrap {
+	margin: 1.5em 0 2em;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	border: 1px solid rgba(127, 127, 127, 0.3);
+	border-radius: 8px;
+}
+
+.rv-table-wrap .rv-table {
+	width: 100%;
+	min-width: 32rem;
+	margin: 0;
+	border: 0;
+	border-collapse: collapse;
+	border-spacing: 0;
+	font-size: 0.95em;
+	line-height: 1.5;
+	table-layout: auto;
+}
+
+.rv-table-wrap .rv-table th,
+.rv-table-wrap .rv-table td {
+	padding: 0.75em 1em;
+	border: 0;
+	border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+	text-align: left;
+	vertical-align: top;
+	overflow-wrap: anywhere;
+}
+
+.rv-table-wrap .rv-table thead th {
+	font-weight: 700;
+	background: rgba(127, 127, 127, 0.12);
+	border-bottom: 2px solid rgba(127, 127, 127, 0.35);
+}
+
+.rv-table-wrap .rv-table tbody tr:nth-child(even) td {
+	background: rgba(127, 127, 127, 0.05);
+}
+
+.rv-table-wrap .rv-table tbody tr:last-child td {
+	border-bottom: 0;
+}
