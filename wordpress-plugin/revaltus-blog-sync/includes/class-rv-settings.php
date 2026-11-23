@@ -192,6 +192,7 @@ class RV_Blog_Sync_Settings {
 							);
 							?>
 							<p class="description"><?php esc_html_e( 'Assigned to new synced posts, and to synced posts still in the default category. Categories you set by hand in WordPress are kept.', 'revaltus-blog-sync' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Categories are managed in Revaltus. Categories you create here are left alone.', 'revaltus-blog-sync' ); ?></p>
 						</td>
 					</tr>
 					<tr>

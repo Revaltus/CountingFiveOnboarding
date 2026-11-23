@@ -30,6 +30,7 @@ import { repoAssetResolver, resolveImageUrls } from './images'
 import { buildWxr, type WxrPage } from './wxr'
 import { buildDiviLibrary } from './library'
 import { buildReadme } from './readme'
+import type { BlogCategory } from '@/lib/content/blog-categories'
 import { analyzeNav, levelOf, buildSectionLandingDivi, type NavSection } from './hierarchy'
 import { buildSitemapModel, sidebarOrder } from './sitemap'
 import { layoutSitemap, sitemapTheme } from './sitemap-layout'
@@ -63,6 +64,8 @@ export type DiviExportInput = {
   // Config-driven plans page (content/pricing-plans.json), if the client ships
   // one — the /pricing host page md carries only the annotation, not the tiers.
   pricingPlans?: PricingPlansConfig | null
+  // Blog categories (content/categories.json) exported as WP category terms.
+  categories?: BlogCategory[]
   dateGmt: string // "YYYY-MM-DD HH:mm:ss" — passed in so the builder stays pure
 }
 
@@ -259,6 +262,7 @@ export async function buildDiviExport(input: DiviExportInput): Promise<DiviExpor
     pages: wxrPages,
     nav: resolvedNav,
     dateGmt: input.dateGmt,
+    categories: input.categories,
   })
 
   const library = buildDiviLibrary({
@@ -308,6 +312,7 @@ export async function buildDiviExport(input: DiviExportInput): Promise<DiviExpor
     uploadsLinked: uploadsResolve,
     siteUrl: assets.origin,
     unportedCss: unportedCssAreas(input.overridesCss ?? null),
+    categoryCount: input.categories?.length ?? 0,
   })
 
   const zip = await assembleZip([

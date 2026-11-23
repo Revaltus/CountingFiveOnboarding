@@ -15,6 +15,8 @@ import { reviewContentForMbpImpact } from '@/lib/mbp/impact-review'
 import { toSitePath } from './url-path'
 import { extractArticleMarkdown } from './html-to-markdown'
 import { buildPostMarkdown } from './post-markdown'
+import { RESERVED_POST_SLUGS } from './blog-categories'
+import { resolvePostCategories } from './post-category-assign'
 import { updatedNavJson, updatedLlmsTxt, updatedLlmsFullTxt } from './resource-draft-generator'
 import { activeTeam } from './active-team'
 import type { AuditResult, CrawledPage } from '@/types/audit-result'
@@ -49,6 +51,29 @@ function kebabSlug(title: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/g, '')
+}
+
+// Slug for an imported article: dodge existing posts, page URL segments, and
+// reserved route slugs (e.g. `category`).
+export function pickImportSlug(args: {
+  title: string
+  importId: string
+  postSlugs: Iterable<string>
+  targetUrls: Iterable<string>
+}): string {
+  const taken = new Set([...RESERVED_POST_SLUGS, ...args.postSlugs])
+  for (const url of args.targetUrls) {
+    const seg = url.split('/').filter(Boolean).pop()
+    if (seg) taken.add(seg)
+  }
+  const base = kebabSlug(args.title) || `article-${args.importId.slice(0, 8)}`
+  let slug = base
+  let suffix = 2
+  while (taken.has(slug)) {
+    slug = `${base}-${suffix}`
+    suffix += 1
+  }
+  return slug
 }
 
 // A plain-text lead for the excerpt/meta fallback: first real prose line with
@@ -328,18 +353,7 @@ export async function importArticleAsIs(
     // Slug: dodge collisions with existing posts AND page URLs (union index).
     const { targets, postSlugs } = await buildCrossLinkIndex(githubRepo)
     const indexUrls = new Set(targets.map((t) => t.url))
-    const taken = new Set(postSlugs)
-    for (const t of targets) {
-      const seg = t.url.split('/').filter(Boolean).pop()
-      if (seg) taken.add(seg)
-    }
-    let slug = kebabSlug(title) || `article-${importId.slice(0, 8)}`
-    let suffix = 2
-    const base = slug
-    while (taken.has(slug)) {
-      slug = `${base}-${suffix}`
-      suffix += 1
-    }
+    const slug = pickImportSlug({ title, importId, postSlugs, targetUrls: targets.map((t) => t.url) })
 
     // Verbatim body → re-host images → sweep old-site links → inject cross-links.
     const rehosted = await rehostImages(extracted.markdown, extracted.imageUrls, slug)
@@ -357,6 +371,16 @@ export async function importArticleAsIs(
     const date = new Date().toISOString().slice(0, 10)
     const author = activeTeam(schema)[0]?.name ?? null
     const canonicalUrl = `${origin}/resources/${slug}`
+
+    // Imports are always new posts, so they're classified (never blocks the import).
+    const categories = await resolvePostCategories({
+      githubRepo,
+      schema,
+      existingPath: null,
+      post: { title, excerpt, body },
+      sessionId: claimed.session_id,
+      contentJobId: claimed.content_job_id,
+    })
 
     const postMarkdown = buildPostMarkdown({
       fm: {
@@ -378,6 +402,7 @@ export async function importArticleAsIs(
       author,
       canonicalUrl,
       heroImage: null,
+      categories,
     })
 
     const entries: RepoEntry[] = [...rehosted.entries, { path: `content/posts/${slug}.md`, content: postMarkdown }]

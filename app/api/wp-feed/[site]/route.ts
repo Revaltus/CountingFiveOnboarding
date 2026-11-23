@@ -18,13 +18,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ site: st
   }
 
   try {
-    const posts = await buildFeed(site.github_repo, {
+    const { posts, categories } = await buildFeed(site.github_repo, {
       siteKey: site.key,
       origin: resolveOrigin(req),
       inlineImages: pluginSupportsInlineImages(req.headers.get('x-rv-plugin-version')),
     })
     return NextResponse.json(
-      { site: site.key, generated_at: new Date().toISOString(), posts },
+      {
+        site: site.key,
+        generated_at: new Date().toISOString(),
+        posts,
+        ...(categories ? { categories } : {}),
+      },
       { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (err) {

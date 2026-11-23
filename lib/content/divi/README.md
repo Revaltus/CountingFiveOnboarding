@@ -88,7 +88,13 @@ The export reads the client's **live `draft` branch** (`content/pages/*.md`,
 `content/nav.json`, `content/client-center.json`) — the same source as the
 editor's "Download doc" — so it always matches what's live, including
 post-generation edits. It does **not** read the original `generated_pages` rows.
-Blog posts (`content/posts/*`) are excluded (Divi blog template is out of scope).
+Blog posts (`content/posts/*`) are excluded (Divi blog template is out of scope),
+but `content/categories.json` is exported as WP category terms (term ids from 900,
+`_rv_category_id` termmeta) **as last published** — read from `main`, not
+`draft`, because the Blog Sync plugin reconciles terms against main's feed and
+would delete a draft-only category on the next sync. A missing or (even
+partially) invalid file exports no categories. Posts arrive via the Revaltus
+Blog Sync plugin.
 
 ## How it maps
 

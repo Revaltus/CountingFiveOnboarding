@@ -37,6 +37,8 @@ export function buildPostMarkdown(args: {
   author: string | null
   canonicalUrl: string
   heroImage: string | null
+  // Blog category ids (content/categories.json). Omitted/empty → no line.
+  categories?: string[]
 }): string {
   const { fm } = args
   const lines = [
@@ -50,6 +52,7 @@ export function buildPostMarkdown(args: {
     ...(args.heroImage ? [`image: ${args.heroImage}`] : []),
     ...(args.heroImage && fm.image_alt ? [`image_alt: ${escapeFrontmatterValue(fm.image_alt)}`] : []),
     `tags: [${fm.tags.map((t) => escapeFrontmatterValue(t)).join(', ')}]`,
+    ...(args.categories?.length ? [`categories: [${args.categories.join(', ')}]`] : []),
     `meta_title: ${escapeFrontmatterValue(fm.meta_title)}`,
     `meta_description: ${escapeFrontmatterValue(fm.meta_description)}`,
     `target_keyword: ${escapeFrontmatterValue(fm.target_keyword)}`,

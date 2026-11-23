@@ -20,6 +20,7 @@ export function buildReadme(opts: {
   uploadsLinked?: boolean
   siteUrl?: string | null
   unportedCss?: string[]
+  categoryCount?: number
 }): string {
   const uploaded = opts.uploadedImageCount ?? 0
   const placed = opts.uploadsPlaced ?? 0
@@ -111,7 +112,11 @@ Import steps (start from a FRESH copy of the c5d5 boilerplate):
   1. Pages + menu:
      WP Admin -> Tools -> Import -> WordPress -> run the importer ->
      upload ${opts.filenameBase}.wxr. (Install the "WordPress Importer" plugin
-     if prompted.) Pages import as DRAFTS so you can review before publishing.
+     if prompted.) Pages import as DRAFTS so you can review before publishing.${
+       opts.categoryCount
+         ? `\n     Blog categories are included as last published (${opts.categoryCount}); posts arrive via the Revaltus Blog Sync plugin.`
+         : ''
+     }
 
   2. Header / Footer:
      Divi -> Divi Library -> Import & Export (portability icon) -> Import ->

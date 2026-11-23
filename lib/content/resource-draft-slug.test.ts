@@ -24,6 +24,10 @@ describe('pickPostSlug', () => {
   it('falls back to an id-derived slug for an unsluggable title', () => {
     expect(pickPostSlug({ title: '!!!', ideaId: 'abcdef1234', existingSlug: null, takenSlugs: [] })).toBe('post-abcdef12')
   })
+
+  it("never mints a reserved slug (the /blog/category route)", () => {
+    expect(pickPostSlug({ title: 'Category', ideaId: 'abcdef12', existingSlug: null, takenSlugs: [] })).toBe('category-2')
+  })
 })
 
 type SlugStubOpts = { reservedRows: Array<{ slug: string }>; currentSlug: string | null; error?: { message: string } }

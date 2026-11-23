@@ -28,6 +28,8 @@ import {
 import ImageReplaceControl from './ImageReplaceControl'
 import HeaderImagePicker from './HeaderImagePicker'
 import PostImagesPanel from './PostImagesPanel'
+import PostCategoryPicker, { withPostCategories } from './PostCategoryPicker'
+import { readCategoryIdsFromFrontmatter } from '@/lib/content/post-categories'
 import IconPickerControl from './IconPickerControl'
 import StructuredContentEditor from './StructuredContentEditor'
 import RichBodyEditor from './RichBodyEditor'
@@ -255,6 +257,13 @@ export default function PageEditor({
           </div>
         )}
         <div className="grid grid-cols-1 gap-3">
+          {isPost && (
+            <PostCategoryPicker
+              sessionId={sessionId}
+              assigned={readCategoryIdsFromFrontmatter(parsed.frontmatter)}
+              onChange={(ids) => commit(withPostCategories(parsed.frontmatter!, ids), bodyContent)}
+            />
+          )}
           {!isPost && <PageOpenerSelect frontmatter={parsed.frontmatter} templateVersion={templateVersion} onChange={(next) => commit(next, bodyContent)} />}
           {promotedFields.map((key) => {
             const value = parsed.frontmatter!.fields[key] ?? ''

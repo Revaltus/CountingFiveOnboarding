@@ -274,6 +274,43 @@ describe('WXR', () => {
   })
 })
 
+describe('WXR blog categories', () => {
+  const base = {
+    siteTitle: 'Korbey Lague PLLP',
+    siteUrl: 'https://firm.com',
+    pages: [
+      { title: 'Home', path: '/', slug: 'home', postId: 100, parentId: 0, content: '[et_pb_section][/et_pb_section]' },
+    ],
+    nav: NAV,
+    dateGmt: '2026-08-21 12:00:00',
+  }
+  const cats = [
+    { id: 'c-7f3a2c', name: 'Construction', slug: 'construction', description: 'Building news' },
+    { id: 'c-111111', name: 'Tax & "Audit" ]]>', slug: 'tax-audit' },
+  ]
+
+  it('emits one wp:category per category with nicename, name and termmeta, before the menu term', () => {
+    const wxr = buildWxr({ ...base, categories: cats })
+    expect(wxr.match(/<wp:category>/g)).toHaveLength(2)
+    expect(wxr).toContain('<wp:term_id>900</wp:term_id><wp:category_nicename>construction</wp:category_nicename>')
+    expect(wxr).toContain('<wp:term_id>901</wp:term_id><wp:category_nicename>tax-audit</wp:category_nicename>')
+    expect(wxr).toContain('<wp:cat_name><![CDATA[Construction]]></wp:cat_name>')
+    expect(wxr).toContain('<wp:category_description><![CDATA[Building news]]></wp:category_description>')
+    expect(wxr).toContain('<wp:category_description><![CDATA[]]></wp:category_description>')
+    expect(wxr).toContain('<wp:meta_key>_rv_category_id</wp:meta_key><wp:meta_value><![CDATA[c-7f3a2c]]></wp:meta_value>')
+    expect(wxr.indexOf('<wp:category>')).toBeLessThan(wxr.indexOf('<wp:term>'))
+  })
+  it('escapes names containing ]]> via the CDATA splitter', () => {
+    const wxr = buildWxr({ ...base, categories: cats })
+    expect(wxr).toContain('<![CDATA[Tax & "Audit" ]]]]><![CDATA[>]]>')
+  })
+  it('no categories → no wp:category and output identical to omitting the option', () => {
+    const without = buildWxr(base)
+    expect(without).not.toContain('<wp:category>')
+    expect(buildWxr({ ...base, categories: [] })).toBe(without)
+  })
+})
+
 describe('Divi library JSON', () => {
   const json = buildDiviLibrary({ brand: BRAND, clientCenter: CLIENT_CENTER, nav: NAV, logoUrl: null, style: buildDiviStyle(BRAND, defaultDesignJson()), dateGmt: '2026-08-21 12:00:00' })
   const parsed = JSON.parse(json)

@@ -18,6 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RV_Blog_Sync {
 
+	const LOCK = 'rv_blog_sync_lock';
+
 	/**
 	 * Run one sync pass.
 	 *
@@ -36,6 +38,26 @@ class RV_Blog_Sync {
 			return new WP_Error( 'rv_config', __( 'Feed URL and secret are required.', 'revaltus-blog-sync' ) );
 		}
 
+		// One pass at a time: WP-cron and "Sync now" (or two cron hits) running
+		// together would race on creating terms and posts. The TTL outlives a
+		// pass (30s fetch + 40s budget) and frees the lock if PHP dies mid-run.
+		if ( get_transient( self::LOCK ) ) {
+			return new WP_Error( 'rv_busy', __( 'A sync is already running — no changes made. Try again in a minute or two.', 'revaltus-blog-sync' ) );
+		}
+		set_transient( self::LOCK, 1, 120 );
+		try {
+			return self::run_pass( $feed_url, $secret );
+		} finally {
+			delete_transient( self::LOCK );
+		}
+	}
+
+	/**
+	 * Fetch the feed and reconcile. Called by run() while it holds the lock.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function run_pass( $feed_url, $secret ) {
 		// Wall budget for the whole run (from before the feed fetch). Kept well
 		// under a typical 60s gateway timeout; filterable for stricter hosts.
 		$start  = microtime( true );
@@ -78,6 +100,11 @@ class RV_Blog_Sync {
 			return new WP_Error( 'rv_parse', __( 'Feed response was not valid JSON — no changes made.', 'revaltus-blog-sync' ) );
 		}
 
+		// Category terms first, outside the time budget: cheap, and it must run
+		// even when every post is hash-skipped. Null when the feed carries no
+		// category list — then no terms change and posts keep v1.2 behaviour.
+		$category_map = RV_Categories::reconcile( $data );
+
 		// Full feed slug set up front, so a partial (budget-limited) pass still
 		// drafts the right posts and never drafts one it simply hasn't reached.
 		$feed_slugs = array();
@@ -106,9 +133,9 @@ class RV_Blog_Sync {
 			if ( $existing
 				&& get_post_meta( $existing->ID, '_rv_content_hash', true ) === $hash
 				&& self::image_ok( $existing->ID, $post ) ) {
-				// Cheap: writes only if the post lacks an author or is still
-				// uncategorized, so changing those settings backfills old posts.
-				self::apply_assignments( $existing->ID, false );
+				// Cheap: writes only if the post lacks an author or its categories
+				// differ, so changing those settings backfills old posts.
+				self::apply_assignments( $existing->ID, false, self::post_category_ids( $post ), $category_map );
 				$skipped++;
 				continue;
 			}
@@ -120,7 +147,7 @@ class RV_Blog_Sync {
 				continue;
 			}
 
-			$verb = self::upsert_post( $slug, $post, $secret, $hash );
+			$verb = self::upsert_post( $slug, $post, $secret, $hash, $category_map );
 			if ( 'created' === $verb ) {
 				$created++;
 			} elseif ( 'updated' === $verb ) {
@@ -153,23 +180,38 @@ class RV_Blog_Sync {
 		foreach ( self::inline_images( $post ) as $image ) {
 			$inline[] = ( isset( $image['filename'] ) ? $image['filename'] : '' ) . ':' . ( isset( $image['sha'] ) ? $image['sha'] : '' );
 		}
-		return md5(
-			implode(
-				'|',
-				array(
-					isset( $post['title'] ) ? $post['title'] : '',
-					isset( $post['html'] ) ? $post['html'] : '',
-					isset( $post['excerpt'] ) ? $post['excerpt'] : '',
-					isset( $post['date_gmt'] ) ? $post['date_gmt'] : '',
-					$tags,
-					isset( $post['meta_title'] ) ? $post['meta_title'] : '',
-					isset( $post['meta_description'] ) ? $post['meta_description'] : '',
-					$hero,
-					$hero_sha,
-					implode( ',', $inline ),
-				)
-			)
+		$fields = array(
+			isset( $post['title'] ) ? $post['title'] : '',
+			isset( $post['html'] ) ? $post['html'] : '',
+			isset( $post['excerpt'] ) ? $post['excerpt'] : '',
+			isset( $post['date_gmt'] ) ? $post['date_gmt'] : '',
+			$tags,
+			isset( $post['meta_title'] ) ? $post['meta_title'] : '',
+			isset( $post['meta_description'] ) ? $post['meta_description'] : '',
+			$hero,
+			$hero_sha,
+			implode( ',', $inline ),
 		);
+		// Only posts with categories get the extra field, so upgrading to
+		// 1.5.0 doesn't re-sync every uncategorized post.
+		$categories = self::post_category_ids( $post );
+		if ( $categories ) {
+			sort( $categories );
+			$fields[] = 'categories:' . implode( ',', $categories );
+		}
+		return md5( implode( '|', $fields ) );
+	}
+
+	/**
+	 * The post's Revaltus category ids from the feed (empty for older servers).
+	 *
+	 * @return string[]
+	 */
+	private static function post_category_ids( $post ) {
+		if ( ! isset( $post['categories'] ) || ! is_array( $post['categories'] ) ) {
+			return array();
+		}
+		return array_values( array_unique( array_filter( $post['categories'], 'is_string' ) ) );
 	}
 
 	/**
@@ -201,7 +243,7 @@ class RV_Blog_Sync {
 	 * images needs an id to parent them to, so it is inserted as a draft
 	 * without them, then published with the rewritten HTML.
 	 */
-	private static function upsert_post( $slug, $post, $secret, $hash ) {
+	private static function upsert_post( $slug, $post, $secret, $hash, $category_map ) {
 		$existing = self::find_existing( $slug );
 		$html     = isset( $post['html'] ) ? (string) $post['html'] : '';
 		$images   = self::inline_images( $post );
@@ -278,7 +320,7 @@ class RV_Blog_Sync {
 			}
 		}
 
-		self::apply_assignments( $post_id, 'created' === $verb );
+		self::apply_assignments( $post_id, 'created' === $verb, self::post_category_ids( $post ), $category_map );
 
 		// Tags (replace the full set each sync).
 		if ( ! empty( $post['tags'] ) && is_array( $post['tags'] ) ) {
@@ -304,18 +346,28 @@ class RV_Blog_Sync {
 	}
 
 	/**
-	 * Author + category from settings. A new post gets both. An existing post is
-	 * only repaired: an author is set when it has none (posts created by WP-cron
-	 * before 1.2.0), and the category only while the post is still in WordPress's
-	 * default category, so a category or author changed by hand in WordPress
-	 * is never overwritten.
+	 * Author + categories. An author is set on a new post, and on an existing
+	 * post that has none (posts created by WP-cron before 1.2.0).
+	 *
+	 * Categories: when the feed carries a category list ($category_map is not
+	 * null) and the post has Revaltus categories, RV_Categories::assign() sets
+	 * them. Otherwise the settings category applies: a new post gets it, an
+	 * existing post only while it is in WordPress's default category, so a
+	 * category changed by hand in WordPress is never overwritten.
+	 *
+	 * @param string[]               $rv_ids       The post's feed category ids.
+	 * @param array<string,int>|null $category_map From RV_Categories::reconcile().
 	 */
-	private static function apply_assignments( $post_id, $is_new ) {
+	private static function apply_assignments( $post_id, $is_new, $rv_ids = array(), $category_map = null ) {
 		if ( ! $is_new && 0 === (int) get_post_field( 'post_author', $post_id ) ) {
 			$author = self::resolve_author();
 			if ( $author ) {
 				wp_update_post( array( 'ID' => $post_id, 'post_author' => $author ) );
 			}
+		}
+
+		if ( null !== $category_map && RV_Categories::assign( $post_id, $rv_ids, $category_map ) ) {
+			return;
 		}
 
 		$category = self::resolve_category();
@@ -363,7 +415,7 @@ class RV_Blog_Sync {
 	/**
 	 * The configured category if it still exists; 0 means use WordPress's default.
 	 */
-	private static function resolve_category() {
+	public static function resolve_category() {
 		$settings = get_option( RV_BLOG_SYNC_OPTION, array() );
 		$id       = isset( $settings['category'] ) ? (int) $settings['category'] : 0;
 		if ( $id && term_exists( $id, 'category' ) ) {

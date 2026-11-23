@@ -3,7 +3,7 @@ Contributors: revaltus
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 
 One-way pull of published blog posts from a Revaltus feed into WordPress.
@@ -18,6 +18,9 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   WordPress is overwritten on the next sync.
 * Matches posts by slug. New/updated posts are published. Posts that disappear
   from the feed are set to DRAFT (never deleted).
+* Syncs Revaltus blog categories: each becomes a WordPress category, and a
+  synced post's categories match the ones set in Revaltus. Categories you
+  create in WordPress are left alone, and ones you add to a post by hand stay.
 * Uploads the hero image into the media library and sets it as the featured image.
 * Uploads body images into the media library and points the post content at
   them. An image replaced in Revaltus (same filename, new file) is re-uploaded,
@@ -59,6 +62,16 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   bold/italic, code, figures and images).
 * Tables get a small scoped stylesheet (`assets/rv-content.css`), loaded only on
   synced single posts.
+* Categories: Revaltus categories are created as WordPress categories (term
+  meta `_rv_category_id`) and kept in step: renamed, re-slugged or deleted when
+  they change in Revaltus (WordPress moves a deleted category's posts to the
+  default category). A WordPress category that already has a Revaltus
+  category's slug is linked to it instead of duplicated; a linked category is
+  only un-linked, never deleted. Categories without that term meta are never
+  changed. A post with Revaltus categories gets exactly those, plus any
+  category added to it by hand in WordPress; the "Category" setting is the
+  fallback for posts with none. If the feed carries no category list, no
+  categories are changed.
 * SEO meta title/description are written for both Yoast and Rank Math; use the
   `rv_blog_sync_seo_meta_keys` filter to map to another SEO plugin.
 
@@ -68,9 +81,24 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   Revaltus (Admin → WordPress Sites) — the feed then 404s and the plugin no-ops.
 * Remove: deactivate + delete the plugin. Synced posts remain in WordPress in
   whatever state they were last in. Post meta `_rv_synced`, `_rv_source_slug`,
-  `_rv_hero_hash`, `_rv_hero_sha` and `_rv_inline_map` are left in place.
+  `_rv_hero_hash`, `_rv_hero_sha`, `_rv_inline_map` and `_rv_assigned_terms`,
+  and category term meta `_rv_category_id` / `_rv_adopted`, are left in place.
 
 == Changelog ==
+
+= 1.5.0 =
+* Blog categories set in Revaltus now sync: they are created, renamed and
+  deleted as WordPress categories, and each synced post gets the categories set
+  in Revaltus. Categories you create in WordPress, and ones you add to a post
+  by hand, are left alone.
+* A WordPress category with the same slug as a Revaltus category is linked
+  rather than duplicated, and is never deleted by the sync.
+* Posts with Revaltus categories leave the "Category" setting's category (and
+  the default category) the plugin put them in; that setting is now the
+  fallback for posts without Revaltus categories.
+* Categories imported with the Revaltus Divi export are recognised as synced.
+* Only one sync runs at a time: a "Sync now" (or cron run) that starts while
+  another is running stops without changes and says so.
 
 = 1.4.0 =
 * Tables in synced posts are styled: header row, row striping, borders, and

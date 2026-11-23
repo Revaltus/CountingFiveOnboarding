@@ -11,8 +11,11 @@
 import { splitFile, type Frontmatter } from '@/lib/editor/frontmatter'
 import { markdownToHtml, type ImageResolver } from '@/lib/content/divi/markdown'
 import { localImageFilename } from '@/lib/editor/page-images'
-import { listTree, readTextBlobs, MAIN_BRANCH } from '@/lib/github/repo-files'
+import { listTree, readTextBlobs, readFile, FileNotFoundError, MAIN_BRANCH } from '@/lib/github/repo-files'
+import { CATEGORIES_PATH, parseCategoriesFileDetailed, readPostCategoryIds } from '@/lib/content/blog-categories'
 import { assetUrlFor, type HeroImage } from './assets'
+
+export type WpFeedCategory = { id: string; name: string; slug: string; description: string }
 
 export type WpFeedPost = {
   slug: string // WordPress match key
@@ -21,6 +24,7 @@ export type WpFeedPost = {
   excerpt: string
   date_gmt: string // "YYYY-MM-DD HH:MM:SS" (GMT), or '' when absent
   tags: string[]
+  categories: string[] // category ids (registry: feed.categories)
   author: string | null
   content_type: string
   canonical_url: string
@@ -38,6 +42,9 @@ export type FeedOptions = {
   // Body images reference auth-only proxy URLs; only plugins >= 1.3.0 rewrite
   // them to WP media URLs, so older plugins get bodies without images.
   inlineImages?: boolean
+  // Category ids from a valid content/categories.json: post ids are filtered to
+  // this set. null/absent (no valid file) passes ids through unfiltered.
+  knownCategoryIds?: ReadonlySet<string> | null
 }
 
 // Plugins send X-RV-Plugin-Version from 1.3.0 on; absent means older.
@@ -165,6 +172,39 @@ function bodyImageResolver(opts: FeedOptions, collected: Map<string, HeroImage>)
   }
 }
 
+function postCategoryIds(content: string, opts: FeedOptions): string[] {
+  const ids = readPostCategoryIds(content)
+  const known = opts.knownCategoryIds
+  return known ? ids.filter((id) => known.has(id)) : ids
+}
+
+// Registry from `main`: missing, unparseable or partially-corrupt file → null
+// (feed omits the key, so the plugin deletes nothing); any other read failure
+// propagates so the route returns 500. A partial list must never be sent: the
+// plugin would delete the dropped categories' terms.
+async function readCategories(githubRepo: string): Promise<WpFeedCategory[] | null> {
+  let text: string
+  try {
+    text = (await readFile(githubRepo, CATEGORIES_PATH, MAIN_BRANCH)).content
+  } catch (err) {
+    if (err instanceof FileNotFoundError) return null
+    throw err
+  }
+  const { file, dropped } = parseCategoriesFileDetailed(text)
+  if (!file || dropped > 0) {
+    console.warn(
+      `[wp-feed] ${githubRepo}: categories.json is invalid` + (file ? ` (${dropped} invalid/duplicate entries)` : '') + ' — omitting categories'
+    )
+    return null
+  }
+  return file.categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    description: c.description ?? '',
+  }))
+}
+
 // Map one repo post file to the feed shape. Pure (no network) — unit-tested.
 // Returns null for a post explicitly flagged draft/unpublished in frontmatter
 // (defensive; the publish flow should already keep drafts off `main`).
@@ -189,6 +229,7 @@ export function postFromRepoFile(
     excerpt: scalar(frontmatter, 'excerpt'),
     date_gmt: normalizeDate(frontmatter?.fields['date'] ?? ''),
     tags: parseTags(frontmatter),
+    categories: postCategoryIds(content, opts),
     author: scalar(frontmatter, 'author') || null,
     content_type: scalar(frontmatter, 'content_type') || 'blog',
     canonical_url: scalar(frontmatter, 'canonical_url') || `/resources/${slug}`,
@@ -204,8 +245,11 @@ export function postFromRepoFile(
 // through a single bounded pool to stay under GitHub's secondary rate limit.
 export async function buildFeed(
   githubRepo: string,
-  opts: Omit<FeedOptions, 'assetShas'>
-): Promise<WpFeedPost[]> {
+  opts: Omit<FeedOptions, 'assetShas' | 'knownCategoryIds'>
+): Promise<{ posts: WpFeedPost[]; categories: WpFeedCategory[] | null }> {
+  const categories = await readCategories(githubRepo)
+  const knownCategoryIds = categories ? new Set(categories.map((c) => c.id)) : null
+
   const tree = await listTree(githubRepo, MAIN_BRANCH, POSTS_PREFIX)
   const entries = tree.filter(
     (e) => e.type === 'blob' && e.path.startsWith(POSTS_PREFIX) && e.path.endsWith('.md')
@@ -221,8 +265,8 @@ export async function buildFeed(
 
   const posts: WpFeedPost[] = []
   for (const f of await readTextBlobs(githubRepo, entries)) {
-    const post = postFromRepoFile(f.path, f.content, { ...opts, assetShas })
+    const post = postFromRepoFile(f.path, f.content, { ...opts, assetShas, knownCategoryIds })
     if (post) posts.push(post)
   }
-  return posts
+  return { posts, categories }
 }

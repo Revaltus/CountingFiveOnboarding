@@ -39,3 +39,27 @@ describe('buildPostMarkdown', () => {
     expect(buildPostMarkdown({ ...base, body }).endsWith(body)).toBe(true)
   })
 })
+
+describe('buildPostMarkdown categories', () => {
+  const base = {
+    fm,
+    body: 'Body.',
+    slug: 's',
+    date: '2026-09-27',
+    contentType: 'blog' as const,
+    author: null,
+    canonicalUrl: '/resources/s',
+    heroImage: null,
+  }
+
+  it('emits an unquoted categories line directly after tags', () => {
+    const md = buildPostMarkdown({ ...base, categories: ['c-1', 'c-2'] })
+    expect(md).toContain('tags: []\ncategories: [c-1, c-2]\nmeta_title:')
+  })
+
+  it('omits the line for an empty or missing list (output unchanged)', () => {
+    const without = buildPostMarkdown(base)
+    expect(without).not.toContain('categories')
+    expect(buildPostMarkdown({ ...base, categories: [] })).toBe(without)
+  })
+})

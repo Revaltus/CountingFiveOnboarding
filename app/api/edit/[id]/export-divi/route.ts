@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api/errors'
 import { resolveEditContext } from '../_helpers'
 import { createServerClient } from '@/lib/supabase/server'
 import { DRAFT_BRANCH, ensureDraftBranch, listTree, readFile } from '@/lib/github/repo-files'
+import { readExportCategories } from '@/lib/content/divi/export-categories'
 import { parseNavJson } from '@/lib/editor/nav-config'
 import { parseClientCenterJson } from '@/lib/editor/client-center-config'
 import { buildBrandJson } from '@/lib/content/brand-json-builder'
@@ -166,6 +167,9 @@ export async function GET(
     const files = await readInBatches(ctx.githubRepo, pagePaths)
     const pages: DiviPageInput[] = files.map((f) => pageInputFromRepoFile(f.path, f.content))
 
+    // Blog categories ride along as WP terms (from main — see readExportCategories).
+    const categories = await readExportCategories(ctx.githubRepo)
+
     // Nav + Client Center from the live repo, with graceful fallbacks. No (or a
     // malformed) nav.json means the editor sidebar shows every page as "Not in
     // navigation", so the export ships an empty menu rather than inventing one.
@@ -257,6 +261,7 @@ export async function GET(
       overridesCss,
       pexelsApiKey: process.env.PEXELS_API_KEY ?? '',
       pricingPlans,
+      categories,
       dateGmt: gmtStamp(new Date()),
     })
 
