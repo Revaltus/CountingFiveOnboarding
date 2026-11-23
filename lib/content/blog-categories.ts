@@ -36,8 +36,13 @@ export function parseCategoriesFile(text: string): CategoriesFile | null {
   const list = (data as { categories?: unknown }).categories
   if (!Array.isArray(list)) return null
   const categories: BlogCategory[] = []
+  const seenIds = new Set<string>()
+  const seenSlugs = new Set<string>()
   for (const item of list) {
     if (!isCategory(item)) continue
+    if (seenIds.has(item.id) || seenSlugs.has(item.slug)) continue
+    seenIds.add(item.id)
+    seenSlugs.add(item.slug)
     const out: BlogCategory = { id: item.id, name: item.name, slug: item.slug }
     if (item.description !== undefined) out.description = item.description
     categories.push(out)
@@ -88,7 +93,15 @@ export function readPostCategoryIds(postText: string): string[] {
   const arr = fm.arrayFields[KEY]
   if (arr) return [...arr]
   const scalar = fm.fields[KEY]
-  return scalar ? [scalar] : []
+  if (scalar) return [scalar]
+  // Block-style list: `categories:\n  - c-1\n  - c-2`
+  const lines = fm.blocks?.[KEY]?.lines ?? []
+  const ids: string[] = []
+  for (const line of lines) {
+    const m = /^\s*-\s+(.+?)\s*$/.exec(line)
+    if (m) ids.push(m[1].replace(/^["']|["']$/g, ''))
+  }
+  return ids
 }
 
 export function setPostCategoryIds(postText: string, ids: string[]): string {

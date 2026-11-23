@@ -51,6 +51,18 @@ describe('categories file', () => {
   })
 })
 
+describe('parseCategoriesFile duplicates', () => {
+  it('keeps the first entry when an id or slug repeats', () => {
+    const f = parseCategoriesFile(JSON.stringify({ version: 1, categories: [
+      { id: 'c-1', name: 'A', slug: 'a' },
+      { id: 'c-1', name: 'B', slug: 'b' },
+      { id: 'c-2', name: 'C', slug: 'a' },
+      { id: 'c-3', name: 'D', slug: 'd' },
+    ] }))
+    expect(f?.categories.map((c) => c.id)).toEqual(['c-1', 'c-3'])
+  })
+})
+
 describe('slugifyCategory', () => {
   it('normalizes', () => {
     expect(slugifyCategory('S-Corp & LLC')).toBe('s-corp-llc')
@@ -94,6 +106,17 @@ describe('post frontmatter', () => {
     expect(readPostCategoryIds(replaceCategoryInPost(p(['c-1', 'c-3']), 'c-1', 'c-2'))).toEqual(['c-2', 'c-3'])
     expect(readPostCategoryIds(replaceCategoryInPost(p(['c-2', 'c-1']), 'c-1', 'c-2'))).toEqual(['c-2'])
     expect(readPostCategoryIds(replaceCategoryInPost(p(['c-1', 'c-3']), 'c-1', null))).toEqual(['c-3'])
+  })
+})
+
+describe('block-style and absent categories', () => {
+  const BLOCK = POST.replace('tags: [x, y]\n', 'tags: [x, y]\ncategories:\n  - c-1\n  - c-2\n')
+  it('reads a block list and preserves it when rewriting', () => {
+    expect(readPostCategoryIds(BLOCK)).toEqual(['c-1', 'c-2'])
+    expect(readPostCategoryIds(replaceCategoryInPost(BLOCK, 'c-1', null))).toEqual(['c-2'])
+  })
+  it('leaves text unchanged when the id is absent', () => {
+    expect(replaceCategoryInPost(POST, 'c-9', 'c-1')).toBe(POST)
   })
 })
 
