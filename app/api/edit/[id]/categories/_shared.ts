@@ -15,13 +15,16 @@ export const actorOf = (ctx: EditContext): Actor => ({ name: ctx.adminName, emai
 // Seed on first open. A StaleShaError that escapes ensureSeeded means a
 // categories.json exists on the draft branch but does not parse.
 export async function seedOrCorrupt(ctx: EditContext): Promise<{ seeded: boolean } | NextResponse> {
-  const supabase = createServerClient()
-  const { data } = await supabase.from('sessions').select('schema_data').eq('id', ctx.sessionId).single()
-  const schema = (data?.schema_data ?? {}) as SessionSchema
   try {
     const before = await loadCategories(ctx.githubRepo)
-    await ensureSeeded(ctx.githubRepo, schema, actorOf(ctx))
-    return { seeded: !before.file }
+    if (before.file) return { seeded: false }
+    // Only hit the DB when seeding is actually needed. A failed read must
+    // throw: seeding from an empty schema would write an empty file for good.
+    const supabase = createServerClient()
+    const { data, error } = await supabase.from('sessions').select('schema_data').eq('id', ctx.sessionId).single()
+    if (error || !data) throw new Error('Could not load session schema for category seeding')
+    await ensureSeeded(ctx.githubRepo, (data.schema_data ?? {}) as SessionSchema, actorOf(ctx))
+    return { seeded: true }
   } catch (err) {
     if (err instanceof StaleShaError) return NextResponse.json({ error: CORRUPT_MESSAGE }, { status: 422 })
     throw err

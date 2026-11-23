@@ -114,6 +114,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
     const next: BlogCategory[] = []
     for (const c of body.categories) {
+      if (typeof c.slug !== 'string' || !c.slug.trim()) throw new CategoryValidationError('Category slug is required', 400)
       if (typeof c.name !== 'string') throw new CategoryValidationError('Category name is required', 400)
       const fields = validateCategoryInput(
         {

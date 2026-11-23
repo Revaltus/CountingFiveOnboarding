@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
   return {
     StaleShaError,
     gate: null as unknown,
+    dbError: false,
     file: null as { version: 1; categories: Array<{ id: string; name: string; slug: string }> } | null,
     sha: 'sha-1' as string | null,
     ensureSeeded: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('@/lib/content/blog-categories-repo', () => ({
 vi.mock('@/lib/design/capabilities-read', () => ({ readDraftTemplateVersion: vi.fn(async () => '2026.09.15') }))
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { schema_data: {} } }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ single: async () => (h.dbError ? { data: null, error: { message: 'pg boom' } } : { data: { schema_data: {} }, error: null }) }) }) }),
   }),
 }))
 vi.mock('../_helpers', () => ({
@@ -49,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   h.gate = null
+  h.dbError = false
   h.file = { version: 1, categories: [A, B] }
   h.sha = 'sha-1'
   h.loadCategories.mockImplementation(async () => ({ file: h.file, sha: h.sha }))
@@ -86,6 +88,19 @@ describe('GET', () => {
     const res = await GET(req('GET'), params)
     expect(res.status).toBe(422)
     expect((await res.json()).error).toMatch(/content\/categories\.json is invalid/)
+  })
+
+  it('5xx and no seed push when the schema read fails', async () => {
+    h.file = null
+    h.dbError = true
+    const res = await GET(req('GET'), params)
+    expect(res.status).toBe(500)
+    expect(h.ensureSeeded).not.toHaveBeenCalled()
+  })
+
+  it('does not read the schema when a file already exists', async () => {
+    h.dbError = true
+    expect((await GET(req('GET'), params)).status).toBe(200)
   })
 
   it('never leaks GitHub error text on 5xx', async () => {
@@ -134,6 +149,13 @@ describe('PATCH', () => {
   it('400 when an unknown id is added', async () => {
     const res = await PATCH(req('PATCH', { categories: [A, B, { id: 'c-zzzzzz', name: 'Z', slug: 'z' }], sha: 'sha-1' }), params)
     expect(res.status).toBe(400)
+  })
+  it('400 when a slug is empty or missing', async () => {
+    for (const bad of [{ ...B, slug: '' }, { id: B.id, name: 'B' }]) {
+      const res = await PATCH(req('PATCH', { categories: [A, bad], sha: 'sha-1' }), params)
+      expect(res.status).toBe(400)
+    }
+    expect(h.saveCategories).not.toHaveBeenCalled()
   })
   it('409 on stale sha', async () => {
     const res = await PATCH(req('PATCH', { categories: [A, B], sha: 'old' }), params)
