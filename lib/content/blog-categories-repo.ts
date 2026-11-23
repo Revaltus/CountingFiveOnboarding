@@ -36,6 +36,12 @@ export type LoadedCategories = { file: CategoriesFile | null; sha: string | null
 
 const POST_PATH_RE = /^content\/posts\/[^/]+\.md$/
 
+// Draft-branch posts (path + blob sha), one entry per content/posts/*.md.
+export async function listDraftPosts(githubRepo: string): Promise<{ path: string; sha: string }[]> {
+  const tree = await listTree(githubRepo, DRAFT_BRANCH, 'content/posts/')
+  return tree.filter((t) => t.type === 'blob' && POST_PATH_RE.test(t.path)).map((t) => ({ path: t.path, sha: t.sha }))
+}
+
 // Draft wins over main. `sha` is only returned for a draft file (it is the
 // optimistic-lock token for draft writes). Invalid JSON yields `file: null`.
 export async function loadCategories(githubRepo: string): Promise<LoadedCategories> {
@@ -83,8 +89,7 @@ export async function listCategoryCounts(githubRepo: string): Promise<Record<str
   const { file } = await loadCategories(githubRepo)
   if (!file) return {}
   const counts: Record<string, number> = Object.fromEntries(file.categories.map((c) => [c.id, 0]))
-  const tree = await listTree(githubRepo, DRAFT_BRANCH, 'content/posts/')
-  const posts = tree.filter((t) => t.type === 'blob' && POST_PATH_RE.test(t.path))
+  const posts = await listDraftPosts(githubRepo)
   if (posts.length === 0) return counts
   for (const post of await readTextBlobs(githubRepo, posts)) {
     for (const id of new Set(readPostCategoryIds(post.content))) {
@@ -139,8 +144,7 @@ export async function deleteCategory(
     },
   ]
 
-  const tree = await listTree(githubRepo, DRAFT_BRANCH, 'content/posts/')
-  const posts = tree.filter((t) => t.type === 'blob' && POST_PATH_RE.test(t.path))
+  const posts = await listDraftPosts(githubRepo)
   const shaByPath = new Map(posts.map((p) => [p.path, p.sha]))
   let postsChanged = 0
   if (posts.length > 0) {

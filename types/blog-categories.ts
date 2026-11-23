@@ -29,3 +29,16 @@ export interface CategoriesPatchResponse {
 export interface CategoryDeleteResponse {
   postsChanged: number
 }
+
+export interface CategoriesAutoAssignRequest {
+  /** Post paths the UI already sent through the classifier during this run. */
+  attempted?: string[]
+}
+export interface CategoriesAutoAssignResponse {
+  categorized: number
+  leftUncategorized: number
+  /** Uncategorized posts not yet attempted (excludes the request's list and this batch). */
+  remaining: number
+  /** Paths classified in this call; the UI accumulates and resends them. */
+  attempted: string[]
+}
