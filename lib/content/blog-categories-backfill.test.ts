@@ -51,7 +51,7 @@ describe('backfillCategories', () => {
     expect(entries).toHaveLength(25)
     expect(entries.some((e) => e.path === 'content/posts/p0.md')).toBe(false)
     expect(entries[0].expectedBlobSha).toMatch(/^sha-/)
-    expect(readPostCategoryIds(entries[0].content!)).toEqual(['c-1'])
+    expect(readPostCategoryIds(String(entries[0].content))).toEqual(['c-1'])
     expect(classify.mock.calls[0][0]).toMatchObject({ title: 'Post 5', excerpt: 'Ex 5', createdBy: 'u', sessionId: 's' })
   })
 
