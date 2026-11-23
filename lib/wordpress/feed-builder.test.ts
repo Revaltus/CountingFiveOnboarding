@@ -228,3 +228,31 @@ describe('generateSiteSecret', () => {
     expect(generateSiteSecret()).not.toBe(s)
   })
 })
+
+describe('categories in the feed', () => {
+  const postWith = (ids: string) =>
+    [
+      '---',
+      'title: T',
+      'slug: t',
+      'categories:',
+      ...ids.split(',').map((i) => `  - ${i.trim()}`),
+      '---',
+      '',
+      'Body',
+      '',
+    ].join('\n')
+
+  it('keeps all ids when no known set is given', () => {
+    const post = postFromRepoFile('content/posts/t.md', postWith('c-a, c-gone'), OPTS)
+    expect(post?.categories).toEqual(['c-a', 'c-gone'])
+  })
+
+  it('filters ids to the known set', () => {
+    const post = postFromRepoFile('content/posts/t.md', postWith('c-a, c-gone'), {
+      ...OPTS,
+      knownCategoryIds: new Set(['c-a', 'c-b']),
+    })
+    expect(post?.categories).toEqual(['c-a'])
+  })
+})

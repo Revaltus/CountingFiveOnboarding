@@ -68,6 +68,11 @@ npx tsc --noEmit   # clean compile confirms nothing else depended on it
 
 - **Posts only** (`content/posts/*.md`). Pages, nav, and client-center are out of
   scope (handled natively or by the Divi bridge).
+- **Categories**: the feed carries `categories: [{id,name,slug,description}]`
+  (the registry from `content/categories.json` on `main`) and each post a
+  `categories: [id]` list, filtered to known ids. The top-level `categories` key
+  is **omitted** when the file is missing or invalid (`[]` when valid but empty);
+  post ids then pass through unfiltered. Plugin 1.5.0 reconciles WP terms from it.
 - **One-way**: git is the source of truth; edits made inside WordPress are
   overwritten on the next sync.
 - **Images**: the featured image (`hero_image`) and standalone body images
