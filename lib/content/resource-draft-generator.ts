@@ -32,6 +32,8 @@ import {
 } from '@/lib/github/repo-files'
 import { buildCrossLinkIndex, type InternalLinkTarget } from './internal-link-targets'
 import { buildPostMarkdown } from './post-markdown'
+import { RESERVED_POST_SLUGS } from './blog-categories'
+import { existingPostPath, resolvePostCategories } from './post-category-assign'
 import { stripGeneratorNotesFromBody } from './strip-generator-notes'
 import { insertReverseLinks } from './reverse-linker'
 import { asJson } from '@/lib/supabase/json-typed'
@@ -486,7 +488,7 @@ export function pickPostSlug(args: {
   existingSlug: string | null
   takenSlugs: Iterable<string>
 }): string {
-  const taken = new Set(args.takenSlugs)
+  const taken = new Set([...RESERVED_POST_SLUGS, ...args.takenSlugs])
   if (args.existingSlug) return args.existingSlug
   const base = kebabSlug(args.title) || `post-${args.ideaId.slice(0, 8)}`
   let slug = base
@@ -541,7 +543,7 @@ export async function generateResourceDraft(
 
   const { data: idea } = await supabase
     .from('resource_ideas')
-    .select('id, content_job_id, session_id, title, angle, target_keyword, secondary_keywords, rationale, external_links, status, draft_notes, content_type, slug')
+    .select('id, content_job_id, session_id, title, angle, target_keyword, secondary_keywords, rationale, external_links, status, draft_notes, content_type, slug, draft_path')
     .eq('id', ideaId)
     .single()
   if (!idea) return { status: 'error', error: 'Idea not found' }
@@ -777,6 +779,17 @@ export async function generateResourceDraft(
     const origin = session.website_url.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://')
     const canonicalUrl = `${origin}/resources/${slug}`
 
+    // A re-draft keeps the post's current categories (an operator may have
+    // edited them); a new post is classified. Never blocks the draft.
+    const categories = await resolvePostCategories({
+      githubRepo: job.github_repo,
+      schema,
+      existingPath: existingPostPath(idea),
+      post: { title: fm.title, excerpt: fm.excerpt, body: postBody },
+      sessionId: idea.session_id,
+      contentJobId: idea.content_job_id,
+    })
+
     const postMarkdown = buildPostMarkdown({
       fm,
       body: postBody,
@@ -786,6 +799,7 @@ export async function generateResourceDraft(
       author,
       canonicalUrl,
       heroImage,
+      categories,
     })
     entries.push({ path: `content/posts/${slug}.md`, content: postMarkdown })
 
