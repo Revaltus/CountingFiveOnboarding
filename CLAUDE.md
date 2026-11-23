@@ -292,6 +292,18 @@ Spec: `docs/superpowers/specs/2026-11-10-visibility-report-design.md`. It's a po
 - **Arc:** each audience's numbered dot is plotted by score along its band (`scoreDotRadius`, `lib/visibility/arc-geometry.ts`): inner edge = 0, outer edge = 100.
 - **Future:** GSC/GA4, scheduled runs, Site Owner view.
 
+### Blog Categories
+Spec: `docs/superpowers/specs/2026-11-23-blog-categories-design.md`. Per-site blog taxonomy kept in the client repo; rendered by template 2026.09.15 and synced to WordPress by plugin 1.5.0.
+- **Contract:** `content/categories.json` = `{ version: 1, categories: [{ id, name, slug, description? }] }`. Ids are permanent `c-xxxxxx` (rename changes name/slug, never the id). Posts carry frontmatter `categories: [ids]`, max 3 (`MAX_POST_CATEGORIES`). All parsing/serialising goes through `lib/content/blog-categories.ts`; repo I/O through `blog-categories-repo.ts`.
+- **AI never creates categories.** The classifier (`post-category-classifier.ts`, `FAST_MODEL` + `FAST_PROVIDER_OPTIONS`) assigns 1–2 existing ids to a post (`post-category-assign.ts`). It respects the draft deadline (`deadlineAt`) and skips rather than overrun. Re-drafts keep a post's existing categories.
+- **Seeding:** once, from `activeNiches` (`seedCategoriesFromSchema`); after that the file is the source of truth. `blog-categories-backfill.ts` auto-categorizes existing posts.
+- **Editor routes:** `app/api/edit/[id]/categories/**` (list/create, `[categoryId]` rename/delete-with-move, `auto-assign`) gate with `resolveEditContext`, so admins, managers, editors and Site Owners may use them. Writes go to the draft branch and reach live via Publish. Delete requires a move target or null and rewrites affected posts.
+- **Reserved slug:** `category` (`RESERVED_POST_SLUGS`) is never used for a post; slug generators suffix it.
+- **Feed** (`lib/wordpress/feed-builder.ts`): carries `categories` only when `categories.json` parses. A missing/invalid file, or a non-empty list whose entries are all invalid, OMITS the key, so the plugin deletes nothing. `[]` means valid-but-empty.
+- **Plugin 1.5.0** (`includes/class-rv-categories.php`): term meta `_rv_category_id` (link) and `_rv_adopted` (a same-name term it adopted); post meta `_rv_assigned_terms` (terms the plugin put on a post). Only terms with `_rv_category_id` are renamed or deleted. Adopted terms are never deleted. Hand-made terms and hand-assigned terms survive. A `rv_blog_sync_lock` transient serialises runs.
+- **Divi WXR** (`lib/content/divi/wxr.ts`) emits categories with `_rv_category_id` termmeta, so a later plugin sync links instead of duplicating.
+- **Template 2026.09.15** renders chips and `{blogPath}/category/{slug}` pages (404 on unknown slug); sites below it ignore categories.
+
 ### Design Studio
 Spec: `docs/superpowers/specs/2026-09-24-design-studio-design.md`. It replaced the template's retired `export-brief` → Claude Design workflow (removed 2026-09-26).
 - Every `app/api/edit/[id]/design/**` route calls `requireDesignAdmin(id)` first (admin-only); the run step route alternatively takes the fail-closed `CRON_SECRET` bearer.
