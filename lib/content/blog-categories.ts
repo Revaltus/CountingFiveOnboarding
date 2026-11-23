@@ -48,6 +48,8 @@ export function parseCategoriesFile(text: string): CategoriesFile | null {
     if (item.description !== undefined) out.description = item.description
     categories.push(out)
   }
+  // A non-empty array with no survivors means a corrupt file, not an empty one.
+  if (list.length > 0 && categories.length === 0) return null
   return { version: 1, categories }
 }
 
@@ -85,6 +87,14 @@ export function readPostCategoryIds(postText: string): string[] {
   const arr = fm.arrayFields[KEY]
   if (arr) return [...arr]
   const scalar = fm.fields[KEY]
+  if (scalar && scalar.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(scalar)
+      if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === 'string' && v.length > 0)
+    } catch {
+      // fall through to scalar handling
+    }
+  }
   if (scalar) return [scalar]
   // Block-style list: `categories:\n  - c-1\n  - c-2`
   const lines = fm.blocks?.[KEY]?.lines ?? []

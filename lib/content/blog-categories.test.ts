@@ -63,6 +63,13 @@ describe('parseCategoriesFile duplicates', () => {
   })
 })
 
+describe('parseCategoriesFile validity', () => {
+  it('treats a non-empty array with no valid entries as invalid, but [] as valid', () => {
+    expect(parseCategoriesFile(JSON.stringify({ version: 1, categories: [{ id: 'c-1', name: 'A' }] }))).toBeNull()
+    expect(parseCategoriesFile(JSON.stringify({ version: 1, categories: [] }))).toEqual({ version: 1, categories: [] })
+  })
+})
+
 describe('slugifyCategory', () => {
   it('normalizes', () => {
     expect(slugifyCategory('S-Corp & LLC')).toBe('s-corp-llc')
@@ -114,6 +121,10 @@ describe('block-style and absent categories', () => {
   it('reads a block list and preserves it when rewriting', () => {
     expect(readPostCategoryIds(BLOCK)).toEqual(['c-1', 'c-2'])
     expect(readPostCategoryIds(replaceCategoryInPost(BLOCK, 'c-1', null))).toEqual(['c-2'])
+  })
+  it('reads a JSON-quoted inline array', () => {
+    const q = POST.replace('tags: [x, y]\n', 'tags: [x, y]\ncategories: ["c-1","c-2"]\n')
+    expect(readPostCategoryIds(q)).toEqual(['c-1', 'c-2'])
   })
   it('leaves text unchanged when the id is absent', () => {
     expect(replaceCategoryInPost(POST, 'c-9', 'c-1')).toBe(POST)
