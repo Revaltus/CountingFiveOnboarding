@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import type { NavJson, NavItem } from '@/types/nav-json'
+import type { BlogCategory } from '@/lib/content/blog-categories'
 import { toPagePath } from '@/lib/content/deliverable-builder'
 
 export type WxrPage = {
@@ -25,6 +26,9 @@ export type WxrPage = {
 }
 
 const MENU_TERM_ID = 2
+// Category term ids start here: page ids are 100+i and menu item ids 500+n, so
+// 900+ stays clear of both for any realistic site.
+const CATEGORY_TERM_ID_BASE = 900
 const MENU_SLUG = 'primary-menu'
 const MENU_NAME = 'Primary Menu'
 
@@ -37,6 +41,15 @@ function cdata(value: string): string {
 // <link>/<guid>): a raw `&` there makes the whole WXR file unparseable.
 function xmlText(value: string): string {
   return (value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function categoryTerm(c: BlogCategory, termId: number): string {
+  return (
+    `\t<wp:category><wp:term_id>${termId}</wp:term_id><wp:category_nicename>${xmlText(c.slug)}</wp:category_nicename>` +
+    `<wp:category_parent></wp:category_parent><wp:cat_name>${cdata(c.name)}</wp:cat_name>` +
+    `<wp:category_description>${cdata(c.description ?? '')}</wp:category_description>` +
+    `<wp:termmeta><wp:meta_key>_rv_category_id</wp:meta_key><wp:meta_value>${cdata(c.id)}</wp:meta_value></wp:termmeta></wp:category>\n`
+  )
 }
 
 function postmeta(key: string, value: string): string {
@@ -146,6 +159,7 @@ export function buildWxr(opts: {
   nav: NavJson
   dateGmt: string
   author?: string
+  categories?: BlogCategory[]
 }): string {
   const author = opts.author ?? 'admin'
   const baseUrl = (opts.siteUrl || 'https://example.com').replace(/\/+$/, '')
@@ -154,6 +168,10 @@ export function buildWxr(opts: {
   for (const p of opts.pages) pageIdByPath.set(p.path, p.postId)
 
   const menuLinks = flattenNav(opts.nav.primary, pageIdByPath, 500, 0, { order: 0 })
+
+  const categories = (opts.categories ?? [])
+    .map((c, i) => categoryTerm(c, CATEGORY_TERM_ID_BASE + i))
+    .join('')
 
   const header =
     `<?xml version="1.0" encoding="UTF-8" ?>\n` +
@@ -172,6 +190,7 @@ export function buildWxr(opts: {
     `\t<wp:base_site_url>${xmlText(baseUrl)}</wp:base_site_url>\n` +
     `\t<wp:base_blog_url>${xmlText(baseUrl)}</wp:base_blog_url>\n` +
     `\t<wp:author><wp:author_id>1</wp:author_id><wp:author_login>${cdata(author)}</wp:author_login><wp:author_email>${cdata('')}</wp:author_email><wp:author_display_name>${cdata(author)}</wp:author_display_name><wp:author_first_name>${cdata('')}</wp:author_first_name><wp:author_last_name>${cdata('')}</wp:author_last_name></wp:author>\n` +
+    categories +
     `\t<wp:term>\n\t\t<wp:term_id>${MENU_TERM_ID}</wp:term_id>\n\t\t<wp:term_taxonomy>nav_menu</wp:term_taxonomy>\n\t\t<wp:term_slug>${MENU_SLUG}</wp:term_slug>\n\t\t<wp:term_name>${cdata(MENU_NAME)}</wp:term_name>\n\t</wp:term>\n`
 
   const pageItems = opts.pages.map((p) => pageItem(p, opts.dateGmt, author, baseUrl)).join('')

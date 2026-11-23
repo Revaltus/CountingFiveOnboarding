@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { resolveEditContext } from '../_helpers'
 import { createServerClient } from '@/lib/supabase/server'
-import { DRAFT_BRANCH, ensureDraftBranch, listTree, readFile } from '@/lib/github/repo-files'
+import { DRAFT_BRANCH, FileNotFoundError, ensureDraftBranch, listTree, readFile } from '@/lib/github/repo-files'
+import { CATEGORIES_PATH, parseCategoriesFile, type BlogCategory } from '@/lib/content/blog-categories'
 import { parseNavJson } from '@/lib/editor/nav-config'
 import { parseClientCenterJson } from '@/lib/editor/client-center-config'
 import { buildBrandJson } from '@/lib/content/brand-json-builder'
@@ -166,6 +167,18 @@ export async function GET(
     const files = await readInBatches(ctx.githubRepo, pagePaths)
     const pages: DiviPageInput[] = files.map((f) => pageInputFromRepoFile(f.path, f.content))
 
+    // Blog categories ride along as WP terms. Missing or invalid → none; a read
+    // failure must never fail the export.
+    let categories: BlogCategory[] = []
+    try {
+      const catBlob = await readFile(ctx.githubRepo, CATEGORIES_PATH, DRAFT_BRANCH)
+      categories = parseCategoriesFile(catBlob.content)?.categories ?? []
+    } catch (err) {
+      if (!(err instanceof FileNotFoundError)) {
+        console.warn('[export-divi] categories read failed; exporting without categories:', err)
+      }
+    }
+
     // Nav + Client Center from the live repo, with graceful fallbacks. No (or a
     // malformed) nav.json means the editor sidebar shows every page as "Not in
     // navigation", so the export ships an empty menu rather than inventing one.
@@ -257,6 +270,7 @@ export async function GET(
       overridesCss,
       pexelsApiKey: process.env.PEXELS_API_KEY ?? '',
       pricingPlans,
+      categories,
       dateGmt: gmtStamp(new Date()),
     })
 
