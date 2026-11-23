@@ -61,3 +61,23 @@ describe('classifyPostCategories', () => {
     )
   })
 })
+
+describe('classifyPostCategories deadline', () => {
+  it('clips the call timeout to the caller deadline', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    generateText.mockResolvedValue({ text: '{"ids":["c-1"]}', usage: {} })
+    await classifyPostCategories({ ...base, deadlineAt: Date.now() + 10_000 })
+    const ms = timeout.mock.calls[0][0]
+    expect(ms).toBeGreaterThan(0)
+    expect(ms).toBeLessThanOrEqual(10_000)
+    timeout.mockRestore()
+  })
+
+  it('uses the full helper cap without a deadline', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    generateText.mockResolvedValue({ text: '{"ids":["c-1"]}', usage: {} })
+    await classifyPostCategories(base)
+    expect(timeout.mock.calls[0][0]).toBe(30_000)
+    timeout.mockRestore()
+  })
+})

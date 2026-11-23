@@ -6,6 +6,7 @@ import { DRAFT_BRANCH, FileNotFoundError, readFile } from '@/lib/github/repo-fil
 import { readPostCategoryIds } from './blog-categories'
 import { ensureSeeded, type Actor } from './blog-categories-repo'
 import { classifyPostCategories } from './post-category-classifier'
+import { HELPER_CALL_CAP_MS, msUntil } from './generation-budget'
 
 // Commit identity for a categories.json seed made by a background generator.
 const GENERATOR_ACTOR: Actor = { name: 'Revaltus', email: null }
@@ -23,6 +24,9 @@ export async function resolvePostCategories(args: {
   post: { title: string; excerpt: string; body: string }
   sessionId: string
   contentJobId: string | null
+  // Epoch ms model work must finish by. Too close → skip seed + classify (the
+  // re-draft read above still runs, so existing categories are never dropped).
+  deadlineAt?: number
 }): Promise<string[]> {
   if (args.existingPath) {
     try {
@@ -36,6 +40,11 @@ export async function resolvePostCategories(args: {
     }
   }
 
+  if (msUntil(args.deadlineAt) < HELPER_CALL_CAP_MS) {
+    console.warn(`[post-categories] No time left to classify "${args.post.title}" — saving without categories`)
+    return []
+  }
+
   try {
     const file = await ensureSeeded(args.githubRepo, args.schema, GENERATOR_ACTOR)
     return await classifyPostCategories({
@@ -45,6 +54,7 @@ export async function resolvePostCategories(args: {
       categories: file.categories,
       sessionId: args.sessionId,
       contentJobId: args.contentJobId,
+      deadlineAt: args.deadlineAt,
     })
   } catch (err) {
     console.warn(`[post-categories] Category assignment skipped for "${args.post.title}":`, err)

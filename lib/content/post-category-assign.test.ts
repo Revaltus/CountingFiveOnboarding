@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/lib/github/repo-files', () => {
   class FileNotFoundError extends Error {}
@@ -41,6 +41,7 @@ describe('resolvePostCategories', () => {
     vi.clearAllMocks()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
+  afterEach(() => vi.restoreAllMocks())
 
   it('re-draft keeps the existing post categories and skips classification', async () => {
     readFile.mockResolvedValue({ content: '---\ntitle: "T"\ncategories: [c-9]\n---\nBody\n', sha: 'x', path: 'content/posts/a.md' })
@@ -74,6 +75,7 @@ describe('resolvePostCategories', () => {
       categories: cats.categories,
       sessionId: 's1',
       contentJobId: 'j1',
+      deadlineAt: undefined,
     })
   })
 
@@ -88,5 +90,35 @@ describe('resolvePostCategories', () => {
     expect(await resolvePostCategories({ ...base, existingPath: null })).toEqual([])
     expect(classify).not.toHaveBeenCalled()
     expect(console.warn).toHaveBeenCalled()
+  })
+
+  it('a non-404 re-draft read error propagates without classifying', async () => {
+    readFile.mockRejectedValue(new Error('github 500'))
+    await expect(resolvePostCategories({ ...base, existingPath: 'content/posts/a.md' })).rejects.toThrow('github 500')
+    expect(seed).not.toHaveBeenCalled()
+    expect(classify).not.toHaveBeenCalled()
+  })
+
+  it('skips seed + classify when the deadline is too close', async () => {
+    const ids = await resolvePostCategories({ ...base, existingPath: null, deadlineAt: Date.now() + 5_000 })
+    expect(ids).toEqual([])
+    expect(seed).not.toHaveBeenCalled()
+    expect(classify).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalled()
+  })
+
+  it('still reuses existing categories when the deadline is too close', async () => {
+    readFile.mockResolvedValue({ content: '---\ntitle: "T"\ncategories: [c-9]\n---\nBody\n', sha: 'x', path: 'content/posts/a.md' })
+    const ids = await resolvePostCategories({ ...base, existingPath: 'content/posts/a.md', deadlineAt: Date.now() + 5_000 })
+    expect(ids).toEqual(['c-9'])
+    expect(seed).not.toHaveBeenCalled()
+  })
+
+  it('passes the deadline through to the classifier when there is time', async () => {
+    seed.mockResolvedValue(cats)
+    classify.mockResolvedValue(['c-1'])
+    const deadlineAt = Date.now() + 120_000
+    expect(await resolvePostCategories({ ...base, existingPath: null, deadlineAt })).toEqual(['c-1'])
+    expect(classify).toHaveBeenCalledWith(expect.objectContaining({ deadlineAt }))
   })
 })

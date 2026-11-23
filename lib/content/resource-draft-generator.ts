@@ -788,6 +788,7 @@ export async function generateResourceDraft(
       post: { title: fm.title, excerpt: fm.excerpt, body: postBody },
       sessionId: idea.session_id,
       contentJobId: idea.content_job_id,
+      deadlineAt: modelDeadline,
     })
 
     const postMarkdown = buildPostMarkdown({

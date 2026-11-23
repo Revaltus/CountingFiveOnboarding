@@ -4,7 +4,7 @@ import { extractJson } from './extract-json'
 import { recordTokenUsage } from './token-usage'
 import { extractCacheUsage } from './cache-control'
 import { FAST_MODEL, FAST_PROVIDER_OPTIONS } from './generation-tuning'
-import { HELPER_CALL_CAP_MS } from './generation-budget'
+import { HELPER_CALL_CAP_MS, clipToDeadline } from './generation-budget'
 import type { BlogCategory } from './blog-categories'
 
 const BODY_EXCERPT_CHARS = 1500
@@ -20,6 +20,8 @@ export async function classifyPostCategories(args: {
   sessionId: string
   contentJobId?: string | null
   createdBy?: string | null
+  // Epoch ms the caller must finish by; the call's timeout is clipped to it.
+  deadlineAt?: number
 }): Promise<string[]> {
   if (args.categories.length === 0) return []
 
@@ -47,7 +49,7 @@ Return ONLY JSON: {"ids":["<id>"]}  (or {"ids":[]} if none fit)`
       prompt,
       maxOutputTokens: 200,
       maxRetries: 2,
-      abortSignal: AbortSignal.timeout(HELPER_CALL_CAP_MS),
+      abortSignal: AbortSignal.timeout(clipToDeadline(args.deadlineAt, HELPER_CALL_CAP_MS)),
     })
     await recordTokenUsage({
       task: 'content',
