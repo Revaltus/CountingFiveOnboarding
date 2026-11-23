@@ -35,6 +35,11 @@ export function pickerState(assigned: string[], known: BlogCategory[]): PickerSt
   return { chips, available, canAdd: chips.length < MAX_POST_CATEGORIES && available.length > 0 }
 }
 
+/** Ids to emit after inline-creating a category: keeps the known assigned ids. */
+export function idsAfterCreate(chipIds: string[], newId: string): string[] {
+  return chipIds.includes(newId) ? chipIds : [...chipIds, newId]
+}
+
 /** Immutable: sets (or removes, when empty) the post's `categories` array field. */
 export function withPostCategories(fm: Frontmatter, ids: string[]): Frontmatter {
   const fields = { ...fm.fields }
@@ -82,6 +87,7 @@ export default function PostCategoryPicker({
   const base = `/api/edit/${sessionId}/categories`
   const [known, setKnown] = useState<BlogCategory[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -91,8 +97,10 @@ export default function PostCategoryPicker({
     try {
       const data = await api<CategoriesGetResponse>(base)
       setKnown(data.categories)
+      setLoadFailed(false)
       setError(null)
     } catch (e) {
+      setLoadFailed(true)
       setError(e instanceof Error ? e.message : 'Could not load categories')
     } finally {
       setLoaded(true)
@@ -118,7 +126,8 @@ export default function PostCategoryPicker({
       setNewName('')
       setCreating(false)
       setError(null)
-      onChange([...chipIds, category.id])
+      setKnown((prev) => (prev.some((c) => c.id === category.id) ? prev : [...prev, category]))
+      onChange(idsAfterCreate(chipIds, category.id))
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create category')
@@ -128,6 +137,7 @@ export default function PostCategoryPicker({
   }
 
   const atMax = chips.length >= MAX_POST_CATEGORIES
+  const locked = loadFailed
 
   return (
     <div className="space-y-2">
@@ -143,6 +153,7 @@ export default function PostCategoryPicker({
               <button
                 type="button"
                 aria-label={`Remove ${c.name}`}
+                disabled={locked}
                 onClick={() => onChange(chipIds.filter((id) => id !== c.id))}
                 className="w-5 h-5 rounded-pill text-text-muted hover:text-brand-cyan focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan"
               >
@@ -168,7 +179,7 @@ export default function PostCategoryPicker({
           <select
             aria-label="Add category"
             value=""
-            disabled={!canAdd}
+            disabled={!canAdd || locked}
             onChange={(e) => {
               if (e.target.value) onChange([...chipIds, e.target.value])
             }}
@@ -186,7 +197,7 @@ export default function PostCategoryPicker({
           <button
             type="button"
             className={secondaryBtn}
-            disabled={atMax || !loaded}
+            disabled={atMax || !loaded || locked}
             onClick={() => setCreating(true)}
           >
             + New category
@@ -228,6 +239,15 @@ export default function PostCategoryPicker({
       {error && (
         <p role="alert" className="text-xs font-body text-error">
           {error}
+          {loadFailed && (
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="ml-2 font-heading font-semibold underline hover:text-brand-cyan"
+            >
+              Retry
+            </button>
+          )}
         </p>
       )}
     </div>

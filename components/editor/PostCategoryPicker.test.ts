@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { pickerState, withPostCategories } from './PostCategoryPicker'
-import type { Frontmatter } from '@/lib/editor/frontmatter'
+import { idsAfterCreate, pickerState, withPostCategories } from './PostCategoryPicker'
+import { serializeFile, type Frontmatter } from '@/lib/editor/frontmatter'
 
 const known = [
   { id: 'c-1', name: 'One', slug: 'one' },
@@ -66,5 +66,17 @@ describe('withPostCategories', () => {
     )
     expect(next.arrayFields.categories).toBeUndefined()
     expect(next.order).toEqual(['title'])
+  })
+})
+
+describe('serialization and create', () => {
+  it('round-trips through serializeFile as an inline array line', () => {
+    const out = serializeFile({ frontmatter: withPostCategories(fm(), ['c-1', 'c-2']), body: 'x' })
+    expect(out).toContain('categories: [c-1, c-2]')
+    expect(out.indexOf('tags:')).toBeLessThan(out.indexOf('categories:'))
+  })
+  it('idsAfterCreate keeps existing assigned ids', () => {
+    expect(idsAfterCreate(['c-1', 'c-2'], 'c-9')).toEqual(['c-1', 'c-2', 'c-9'])
+    expect(idsAfterCreate(['c-1'], 'c-1')).toEqual(['c-1'])
   })
 })
