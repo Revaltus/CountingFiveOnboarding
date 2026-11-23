@@ -7,3 +7,5 @@ export function slugifyCategory(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 }
+
+export const MAX_POST_CATEGORIES = 3

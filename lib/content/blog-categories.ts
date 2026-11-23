@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto'
-import { slugifyCategory } from '@/lib/content/category-slug'
+import { slugifyCategory, MAX_POST_CATEGORIES } from '@/lib/content/category-slug'
 import type { SessionSchema } from '@/types/session-schema'
 import { activeNiches } from '@/lib/content/active-niches'
 import { serializeFile, splitFile } from '@/lib/editor/frontmatter'
 
-export { slugifyCategory }
+export { slugifyCategory, MAX_POST_CATEGORIES }
 export const CATEGORIES_PATH = 'content/categories.json'
-export const MAX_POST_CATEGORIES = 3
 // Post slugs that would collide with the /blog/category/... routes.
 export const RESERVED_POST_SLUGS: readonly string[] = ['category']
 
