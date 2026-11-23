@@ -1,8 +1,10 @@
 import { randomBytes } from 'node:crypto'
+import { slugifyCategory } from '@/lib/content/category-slug'
 import type { SessionSchema } from '@/types/session-schema'
 import { activeNiches } from '@/lib/content/active-niches'
 import { serializeFile, splitFile } from '@/lib/editor/frontmatter'
 
+export { slugifyCategory }
 export const CATEGORIES_PATH = 'content/categories.json'
 export const MAX_POST_CATEGORIES = 3
 // Post slugs that would collide with the /blog/category/... routes.
@@ -52,15 +54,6 @@ export function parseCategoriesFile(text: string): CategoriesFile | null {
 
 export function serializeCategoriesFile(file: CategoriesFile): string {
   return JSON.stringify(file, null, 2) + '\n'
-}
-
-export function slugifyCategory(name: string): string {
-  return name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
 }
 
 export function newCategoryId(existing: Iterable<string>): string {

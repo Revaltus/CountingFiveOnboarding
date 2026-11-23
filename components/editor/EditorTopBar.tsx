@@ -263,6 +263,15 @@ function OverflowMenu({
               )}
             </>
           )}
+          <Link
+            href={`/admin/content/${sessionId}/blog-categories`}
+            role="menuitem"
+            className={`${itemClass} text-text-secondary hover:text-brand-cyan`}
+            title="Manage the blog's categories: add, rename, reorder, delete, and auto-categorize posts."
+            onClick={() => setOpen(false)}
+          >
+            Blog categories →
+          </Link>
           <div className="border-t border-border-default my-1" />
           <a
             href={`/api/edit/${sessionId}/document`}
