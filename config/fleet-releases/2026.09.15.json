@@ -1,0 +1,39 @@
+{
+  "_note": "Template 2026.09.15 (feat/blog-categories, template commit 741785c on top of dafdb6a). File set = the CHANGELOG 'Rollout notes (template 2026.09.14 → 2026.09.15)' list. Blog categories: content/categories.json + post `categories:` ids, category chips on the blog index linking to {blogPath}/category/{slug} pages (default path: src/app/resources/category/[slug]; custom path: the catch-all), post category links + JSON-LD articleSection, sitemap + llms.txt entries. Roll a site BEFORE the platform writes categories into its posts. theme.css, package.json and package-lock.json untouched.",
+  "templateVersion": "2026.09.15",
+  "notes": "Blog categories: the blog page gets category filters, each category gets its own page (listed for Google and AI tools), and posts link to their categories. Sites without categories look the same.",
+  "exclude": [
+    "\\.png$",
+    "^e2e/.*-snapshots/"
+  ],
+  "themeCss": "none",
+  "lockfile": "ignore",
+  "expectFiles": {
+    "overwrite": [
+      "CHANGELOG.md",
+      "docs/authoring-content.md",
+      "src/app/[...slug]/page.tsx",
+      "src/app/llms.txt/route.ts",
+      "src/app/resources/[slug]/page.tsx",
+      "src/app/sitemap.ts",
+      "src/components/blocks/ResourceBrowser.tsx",
+      "src/lib/content/blog-config.test.ts",
+      "src/lib/content/blog-config.ts",
+      "src/lib/content/blog-views.tsx",
+      "src/lib/content/filter-posts.test.ts",
+      "src/lib/content/filter-posts.ts",
+      "src/lib/content/get-post.ts",
+      "src/lib/content/post-frontmatter-schema.ts",
+      "src/lib/theme/template-marker.test.ts"
+    ],
+    "add": [
+      "src/app/resources/category/[slug]/page.tsx",
+      "src/app/sitemap.test.ts",
+      "src/lib/content/categories.ts",
+      "src/lib/content/category-path.ts",
+      "src/lib/content/get-categories.test.ts",
+      "src/lib/content/get-categories.ts"
+    ],
+    "delete": []
+  }
+}
