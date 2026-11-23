@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { backfillCategories } from '@/lib/content/blog-categories-backfill'
-import type { SessionSchema } from '@/types/session-schema'
 import type { CategoriesAutoAssignRequest } from '@/types/blog-categories'
 import { resolveEditContext } from '../../_helpers'
 import { actorOf, domainError, seedOrCorrupt } from '../_shared'
@@ -30,14 +29,13 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'attempted must be an array of paths' }, { status: 400 })
   }
   try {
-    // Seeds on first use (and 422s on a corrupt file), so backfill only ever
-    // sees an existing categories.json and its schema argument goes unused.
+    // Seeds on first use from the session's schema (and 422s on a corrupt
+    // file); backfill then requires the existing file (422 if corrupt/missing).
     const seed = await seedOrCorrupt(ctx)
     if (seed instanceof NextResponse) return seed
     const res = await backfillCategories({
       githubRepo: ctx.githubRepo,
       sessionId: ctx.sessionId,
-      schema: {} as SessionSchema,
       actor: actorOf(ctx),
       createdBy: ctx.adminId,
       attempted: attempted ?? [],

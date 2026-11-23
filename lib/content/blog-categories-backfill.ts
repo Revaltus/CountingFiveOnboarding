@@ -3,12 +3,11 @@
 // loops while `remaining > 0`, resending `attempted` so each post is classified
 // at most once per run (posts the classifier returns [] for stay uncategorized).
 // ---------------------------------------------------------------------------
-import type { SessionSchema } from '@/types/session-schema'
 import type { CategoriesAutoAssignResponse } from '@/types/blog-categories'
 import { DRAFT_BRANCH, ensureDraftBranch, pushEntriesToBranch, readTextBlobs, type PushEntry } from '@/lib/github/repo-files'
 import { splitFile } from '@/lib/editor/frontmatter'
 import { readPostCategoryIds, setPostCategoryIds } from './blog-categories'
-import { ensureSeeded, listDraftPosts, type Actor } from './blog-categories-repo'
+import { listDraftPosts, requireCategories, type Actor } from './blog-categories-repo'
 import { classifyPostCategories } from './post-category-classifier'
 
 export const BACKFILL_BATCH = 25
@@ -44,13 +43,13 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export async function backfillCategories(args: {
   githubRepo: string
   sessionId: string
-  schema: SessionSchema
   actor: Actor
   createdBy: string
   attempted: string[]
   deadlineAt?: number
 }): Promise<CategoriesAutoAssignResponse> {
-  const file = await ensureSeeded(args.githubRepo, args.schema, args.actor)
+  // Never seeds: the caller seeds first. Corrupt/missing → CategoriesFileError (422).
+  const { file } = await requireCategories(args.githubRepo)
   const validIds = new Set(file.categories.map((c) => c.id))
   const skip = new Set(args.attempted)
 

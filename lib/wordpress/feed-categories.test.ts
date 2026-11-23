@@ -25,12 +25,12 @@ vi.mock('@/lib/wordpress/sites', () => ({
 import { buildFeed } from './feed-builder'
 import { GET } from '@/app/api/wp-feed/[site]/route'
 
-const POST = ['---', 'title: T', 'slug: t', 'categories:', '  - c-a', '  - c-gone', '---', '', 'Body', ''].join('\n')
+const POST = ['---', 'title: T', 'slug: t', 'categories:', '  - c-aaaaaa', '  - c-999999', '---', '', 'Body', ''].join('\n')
 const FILE = JSON.stringify({
   version: 1,
   categories: [
-    { id: 'c-a', name: 'A', slug: 'a', description: 'About A' },
-    { id: 'c-b', name: 'B', slug: 'b' },
+    { id: 'c-aaaaaa', name: 'A', slug: 'a', description: 'About A' },
+    { id: 'c-bbbbbb', name: 'B', slug: 'b' },
   ],
 })
 
@@ -58,10 +58,10 @@ describe('buildFeed categories', () => {
     setup(async () => ({ content: FILE }))
     const { posts, categories } = await buildFeed('acme', OPTS)
     expect(categories).toEqual([
-      { id: 'c-a', name: 'A', slug: 'a', description: 'About A' },
-      { id: 'c-b', name: 'B', slug: 'b', description: '' },
+      { id: 'c-aaaaaa', name: 'A', slug: 'a', description: 'About A' },
+      { id: 'c-bbbbbb', name: 'B', slug: 'b', description: '' },
     ])
-    expect(posts[0].categories).toEqual(['c-a'])
+    expect(posts[0].categories).toEqual(['c-aaaaaa'])
     expect(await routeBody()).toHaveProperty('categories')
   })
 
@@ -71,13 +71,32 @@ describe('buildFeed categories', () => {
     })
     const { posts, categories } = await buildFeed('acme', OPTS)
     expect(categories).toBeNull()
-    expect(posts[0].categories).toEqual(['c-a', 'c-gone'])
+    expect(posts[0].categories).toEqual(['c-aaaaaa', 'c-999999'])
     expect(await routeBody()).not.toHaveProperty('categories')
   })
 
   it('invalid JSON: null categories and no route key', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     setup(async () => ({ content: '{not json' }))
     expect((await buildFeed('acme', OPTS)).categories).toBeNull()
+    expect(await routeBody()).not.toHaveProperty('categories')
+  })
+
+  it('partially-corrupt file (one bad entry): null categories, warning, no route key', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const partial = JSON.stringify({
+      version: 1,
+      categories: [...(JSON.parse(FILE) as { categories: unknown[] }).categories, { id: 'c-cccccc', name: '', slug: 'c' }],
+    })
+    setup(async () => ({ content: partial }))
+    expect((await buildFeed('acme', OPTS)).categories).toBeNull()
+    expect(await routeBody()).not.toHaveProperty('categories')
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('a non-conforming id makes the file corrupt (no route key)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setup(async () => ({ content: JSON.stringify({ version: 1, categories: [{ id: 'c-1', name: 'A', slug: 'a' }] }) }))
     expect(await routeBody()).not.toHaveProperty('categories')
   })
 

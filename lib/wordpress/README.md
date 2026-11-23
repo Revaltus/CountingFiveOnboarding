@@ -71,10 +71,12 @@ npx tsc --noEmit   # clean compile confirms nothing else depended on it
 - **Categories**: the feed carries `categories: [{id,name,slug,description}]`
   (the registry from `content/categories.json` on `main`) and each post a
   `categories: [id]` list, filtered to known ids. The top-level `categories` key
-  is **omitted** when the file is missing or invalid (`[]` when valid but empty);
+  is **omitted** when the file is missing, invalid or partially corrupt (any bad
+  or duplicate entry — never a partial list) (`[]` when valid but empty);
   post ids then pass through unfiltered. Plugin 1.5.0 reconciles WP terms from it.
   Reconcile rules: only terms carrying term meta `_rv_category_id` are renamed or
-  deleted; a hand-made same-name term is adopted (`_rv_adopted`) and never deleted;
+  deleted; a hand-made term with the same SLUG is adopted (`_rv_adopted`) and never deleted
+  (a same-name term with another slug is left alone and a new term is created);
   `_rv_assigned_terms` post meta records what the plugin assigned so hand-assigned
   terms survive; runs are serialised by the `rv_blog_sync_lock` transient.
 - **One-way**: git is the source of truth; edits made inside WordPress are

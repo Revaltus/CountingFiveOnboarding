@@ -18,8 +18,9 @@ import {
 } from '@/lib/github/repo-files'
 import {
   CATEGORIES_PATH,
+  CategoriesFileError,
   CategoryValidationError,
-  parseCategoriesFile,
+  parseCategoriesFileDetailed,
   readPostCategoryIds,
   replaceCategoryInPost,
   seedCategoriesFromSchema,
@@ -32,7 +33,9 @@ function authorOf(actor: Actor): { authorName: string; authorEmail: string } {
   return { authorName: actor.name ?? 'Revaltus Admin', authorEmail: actor.email ?? 'admin@revaltus.com' }
 }
 
-export type LoadedCategories = { file: CategoriesFile | null; sha: string | null }
+// `corrupt` means a categories.json exists but is invalid or partially invalid
+// (`file` is then null). Writers must refuse rather than rewrite it.
+export type LoadedCategories = { file: CategoriesFile | null; sha: string | null; corrupt: boolean }
 
 const POST_PATH_RE = /^content\/posts\/[^/]+\.md$/
 
@@ -43,27 +46,46 @@ export async function listDraftPosts(githubRepo: string): Promise<{ path: string
 }
 
 // Draft wins over main. `sha` is only returned for a draft file (it is the
-// optimistic-lock token for draft writes). Invalid JSON yields `file: null`.
+// optimistic-lock token for draft writes). Any invalid or duplicate entry makes
+// the whole file corrupt: `{ file: null, corrupt: true }`.
 export async function loadCategories(githubRepo: string): Promise<LoadedCategories> {
   for (const branch of [DRAFT_BRANCH, MAIN_BRANCH]) {
+    let content: string
+    let sha: string
     try {
       const blob = await readFile(githubRepo, CATEGORIES_PATH, branch)
-      const file = parseCategoriesFile(blob.content)
-      if (!file) console.warn('[blog-categories] categories.json is not valid')
-      return { file, sha: branch === DRAFT_BRANCH && file ? blob.sha : null }
+      content = blob.content
+      sha = blob.sha
     } catch (err) {
       if (err instanceof FileNotFoundError) continue
       throw err
     }
+    const { file, dropped } = parseCategoriesFileDetailed(content)
+    if (!file || dropped > 0) {
+      console.warn(
+        `[blog-categories] categories.json on ${branch} is not valid` + (file ? ` (${dropped} invalid/duplicate entries)` : '')
+      )
+      return { file: null, sha: null, corrupt: true }
+    }
+    return { file, sha: branch === DRAFT_BRANCH ? sha : null, corrupt: false }
   }
-  return { file: null, sha: null }
+  return { file: null, sha: null, corrupt: false }
+}
+
+// The existing file, or a CategoriesFileError (corrupt / missing).
+export async function requireCategories(githubRepo: string): Promise<LoadedCategories & { file: CategoriesFile }> {
+  const loaded = await loadCategories(githubRepo)
+  if (loaded.corrupt) throw new CategoriesFileError('corrupt')
+  if (!loaded.file) throw new CategoriesFileError('missing')
+  return { ...loaded, file: loaded.file }
 }
 
 // Seed categories from the MBP niches when no file exists. Race-safe: the
 // create is guarded with expectedBlobSha null, and a lost race returns the
-// other writer's file.
+// other writer's file. A corrupt file is never re-seeded over (CategoriesFileError).
 export async function ensureSeeded(githubRepo: string, schema: SessionSchema, actor: Actor): Promise<CategoriesFile> {
   const existing = await loadCategories(githubRepo)
+  if (existing.corrupt) throw new CategoriesFileError('corrupt')
   if (existing.file) return existing.file
   const seeded = seedCategoriesFromSchema(schema)
   try {
@@ -79,6 +101,7 @@ export async function ensureSeeded(githubRepo: string, schema: SessionSchema, ac
   } catch (err) {
     if (!(err instanceof StaleShaError)) throw err
     const winner = await loadCategories(githubRepo)
+    if (winner.corrupt) throw new CategoriesFileError('corrupt')
     if (!winner.file) throw err
     return winner.file
   }
@@ -126,6 +149,7 @@ export async function deleteCategory(
   actor: Actor
 ): Promise<{ postsChanged: number }> {
   const loaded = await loadCategories(githubRepo)
+  if (loaded.corrupt) throw new CategoriesFileError('corrupt')
   const file = loaded.file
   const target = file?.categories.find((c) => c.id === id)
   if (!file || !target) throw new CategoryValidationError('Category not found', 400)

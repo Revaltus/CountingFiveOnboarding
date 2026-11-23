@@ -27,6 +27,7 @@ import {
   saveCategories,
   deleteCategory,
   listCategoryCounts,
+  requireCategories,
 } from './blog-categories-repo'
 import { CategoryValidationError, serializeCategoriesFile, type CategoriesFile } from './blog-categories'
 import type { SessionSchema } from '@/types/session-schema'
@@ -40,8 +41,8 @@ const actor = { name: 'A', email: 'a@x.com' }
 const file: CategoriesFile = {
   version: 1,
   categories: [
-    { id: 'c-1', name: 'One', slug: 'one' },
-    { id: 'c-2', name: 'Two', slug: 'two' },
+    { id: 'c-111111', name: 'One', slug: 'one' },
+    { id: 'c-222222', name: 'Two', slug: 'two' },
   ],
 }
 const blob = (content: string, sha = 'sha-1') => ({ path: 'content/categories.json', content, sha })
@@ -68,12 +69,55 @@ describe('loadCategories', () => {
   })
   it('returns null when both 404', async () => {
     readFile.mockRejectedValue(new repo.FileNotFoundError('x'))
-    expect(await loadCategories('o/r')).toEqual({ file: null, sha: null })
+    expect(await loadCategories('o/r')).toEqual({ file: null, sha: null, corrupt: false })
   })
   it('returns null on invalid JSON without throwing', async () => {
     readFile.mockResolvedValueOnce(blob('{nope'))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(await loadCategories('o/r')).toEqual({ file: null, sha: null })
+    expect(await loadCategories('o/r')).toEqual({ file: null, sha: null, corrupt: true })
+  })
+  it('treats a partially-corrupt draft file as corrupt (no fallback to main)', async () => {
+    const partial = JSON.stringify({ version: 1, categories: [...file.categories, { id: 'bad', name: 'X', slug: 'x' }] })
+    readFile.mockResolvedValueOnce(blob(partial))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await loadCategories('o/r')).toEqual({ file: null, sha: null, corrupt: true })
+    expect(readFile).toHaveBeenCalledTimes(1)
+  })
+  it('treats a partially-corrupt main file as corrupt', async () => {
+    const dup = JSON.stringify({ version: 1, categories: [...file.categories, { ...file.categories[0], slug: 'other' }] })
+    readFile.mockRejectedValueOnce(new repo.FileNotFoundError('x'))
+    readFile.mockResolvedValueOnce(blob(dup))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect((await loadCategories('o/r')).corrupt).toBe(true)
+  })
+})
+
+describe('corrupt file is never rewritten', () => {
+  const partial = JSON.stringify({ version: 1, categories: [...file.categories, { id: 'c-333333', name: '', slug: 'z' }] })
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  it('ensureSeeded throws CategoriesFileError(corrupt) without pushing', async () => {
+    readFile.mockResolvedValue(blob(partial))
+    await expect(ensureSeeded('o/r', {} as SessionSchema, actor)).rejects.toMatchObject({ name: 'CategoriesFileError', kind: 'corrupt' })
+    expect(push).not.toHaveBeenCalled()
+  })
+  it('ensureSeeded does not seed over a corrupt main-only file', async () => {
+    readFile.mockRejectedValueOnce(new repo.FileNotFoundError('x'))
+    readFile.mockResolvedValueOnce(blob(partial))
+    await expect(ensureSeeded('o/r', {} as SessionSchema, actor)).rejects.toMatchObject({ kind: 'corrupt' })
+    expect(push).not.toHaveBeenCalled()
+  })
+  it('deleteCategory throws CategoriesFileError(corrupt) without pushing', async () => {
+    readFile.mockResolvedValue(blob(partial))
+    await expect(deleteCategory('o/r', 'c-111111', null, actor)).rejects.toMatchObject({ kind: 'corrupt' })
+    expect(push).not.toHaveBeenCalled()
+  })
+  it('requireCategories distinguishes corrupt from missing', async () => {
+    readFile.mockResolvedValueOnce(blob(partial))
+    await expect(requireCategories('o/r')).rejects.toMatchObject({ kind: 'corrupt' })
+    readFile.mockRejectedValue(new repo.FileNotFoundError('x'))
+    await expect(requireCategories('o/r')).rejects.toMatchObject({ kind: 'missing' })
   })
 })
 
@@ -114,23 +158,23 @@ describe('deleteCategory', () => {
       { path: 'content/posts/b.md', sha: 'sb', type: 'blob' },
     ])
     readTextBlobs.mockResolvedValueOnce([
-      { path: 'content/posts/a.md', content: post(['c-1']) },
-      { path: 'content/posts/b.md', content: post(['c-2']) },
+      { path: 'content/posts/a.md', content: post(['c-111111']) },
+      { path: 'content/posts/b.md', content: post(['c-222222']) },
     ])
-    const r = await deleteCategory('o/r', 'c-1', 'c-2', actor)
+    const r = await deleteCategory('o/r', 'c-111111', 'c-222222', actor)
     expect(r).toEqual({ postsChanged: 1 })
     expect(push).toHaveBeenCalledTimes(1)
     const entries = push.mock.calls[0][2]
     expect(entries.map((e) => e.path)).toEqual(['content/categories.json', 'content/posts/a.md'])
     expect(entries[0].expectedBlobSha).toBe('cat-sha')
-    expect(entries[0].content).not.toContain('c-1')
+    expect(entries[0].content).not.toContain('c-111111')
     expect(entries[1].expectedBlobSha).toBe('sa')
-    expect(String(entries[1].content)).toContain('c-2')
+    expect(String(entries[1].content)).toContain('c-222222')
     expect(push.mock.calls[0][3]).toBe('Delete blog category One')
   })
   it('rejects a moveTo that is not in the list', async () => {
     readFile.mockResolvedValueOnce(blob(serializeCategoriesFile(file)))
-    await expect(deleteCategory('o/r', 'c-1', 'c-9', actor)).rejects.toMatchObject({
+    await expect(deleteCategory('o/r', 'c-111111', 'c-999999', actor)).rejects.toMatchObject({
       name: 'CategoryValidationError',
       status: 400,
     })
@@ -147,9 +191,9 @@ describe('listCategoryCounts', () => {
       { path: 'content/posts/b.md', sha: 'sb', type: 'blob' },
     ])
     readTextBlobs.mockResolvedValueOnce([
-      { path: 'content/posts/a.md', content: post(['c-1', 'c-2']) },
-      { path: 'content/posts/b.md', content: post(['c-1', 'zzz']) },
+      { path: 'content/posts/a.md', content: post(['c-111111', 'c-222222']) },
+      { path: 'content/posts/b.md', content: post(['c-111111', 'zzz']) },
     ])
-    expect(await listCategoryCounts('o/r')).toEqual({ 'c-1': 2, 'c-2': 1 })
+    expect(await listCategoryCounts('o/r')).toEqual({ 'c-111111': 2, 'c-222222': 1 })
   })
 })

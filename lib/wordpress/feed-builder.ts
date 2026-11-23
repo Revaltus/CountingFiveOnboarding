@@ -12,7 +12,7 @@ import { splitFile, type Frontmatter } from '@/lib/editor/frontmatter'
 import { markdownToHtml, type ImageResolver } from '@/lib/content/divi/markdown'
 import { localImageFilename } from '@/lib/editor/page-images'
 import { listTree, readTextBlobs, readFile, FileNotFoundError, MAIN_BRANCH } from '@/lib/github/repo-files'
-import { CATEGORIES_PATH, parseCategoriesFile, readPostCategoryIds } from '@/lib/content/blog-categories'
+import { CATEGORIES_PATH, parseCategoriesFileDetailed, readPostCategoryIds } from '@/lib/content/blog-categories'
 import { assetUrlFor, type HeroImage } from './assets'
 
 export type WpFeedCategory = { id: string; name: string; slug: string; description: string }
@@ -178,8 +178,10 @@ function postCategoryIds(content: string, opts: FeedOptions): string[] {
   return known ? ids.filter((id) => known.has(id)) : ids
 }
 
-// Registry from `main`: missing or unparseable file → null (feed omits the key);
-// any other read failure propagates so the route returns 500.
+// Registry from `main`: missing, unparseable or partially-corrupt file → null
+// (feed omits the key, so the plugin deletes nothing); any other read failure
+// propagates so the route returns 500. A partial list must never be sent: the
+// plugin would delete the dropped categories' terms.
 async function readCategories(githubRepo: string): Promise<WpFeedCategory[] | null> {
   let text: string
   try {
@@ -188,8 +190,13 @@ async function readCategories(githubRepo: string): Promise<WpFeedCategory[] | nu
     if (err instanceof FileNotFoundError) return null
     throw err
   }
-  const file = parseCategoriesFile(text)
-  if (!file) return null
+  const { file, dropped } = parseCategoriesFileDetailed(text)
+  if (!file || dropped > 0) {
+    console.warn(
+      `[wp-feed] ${githubRepo}: categories.json is invalid` + (file ? ` (${dropped} invalid/duplicate entries)` : '') + ' — omitting categories'
+    )
+    return null
+  }
   return file.categories.map((c) => ({
     id: c.id,
     name: c.name,

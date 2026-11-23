@@ -3,8 +3,9 @@ import { slugifyCategory, MAX_POST_CATEGORIES } from '@/lib/content/category-slu
 import type { SessionSchema } from '@/types/session-schema'
 import { activeNiches } from '@/lib/content/active-niches'
 import { serializeFile, splitFile } from '@/lib/editor/frontmatter'
+import { readPostCategoryIds, readCategoryIdsFromFrontmatter } from '@/lib/content/post-categories'
 
-export { slugifyCategory, MAX_POST_CATEGORIES }
+export { slugifyCategory, MAX_POST_CATEGORIES, readPostCategoryIds, readCategoryIdsFromFrontmatter }
 export const CATEGORIES_PATH = 'content/categories.json'
 // Post slugs that would collide with the /blog/category/... routes.
 export const RESERVED_POST_SLUGS: readonly string[] = ['category']
@@ -13,44 +14,70 @@ export type BlogCategory = { id: string; name: string; slug: string; description
 export type CategoriesFile = { version: 1; categories: BlogCategory[] }
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+// Must match the template's id rule (src/lib/content/categories.ts).
+export const CATEGORY_ID_RE = /^c-[0-9a-f]{6}$/
 const KEY = 'categories'
 
 function isCategory(v: unknown): v is BlogCategory {
   if (!v || typeof v !== 'object') return false
   const c = v as Record<string, unknown>
   return (
-    typeof c.id === 'string' && c.id.length > 0 &&
+    typeof c.id === 'string' && CATEGORY_ID_RE.test(c.id) &&
     typeof c.name === 'string' && c.name.trim().length > 0 &&
     typeof c.slug === 'string' && SLUG_RE.test(c.slug) &&
     (c.description === undefined || typeof c.description === 'string')
   )
 }
 
-export function parseCategoriesFile(text: string): CategoriesFile | null {
+// `file` is null when the text is not a categories file at all; otherwise it
+// holds the valid entries and `dropped` counts invalid/duplicate ones. A file
+// with dropped > 0 is CORRUPT — never treat the remainder as the real list
+// (a sync or write would then delete the dropped categories).
+export type ParsedCategoriesFile = { file: CategoriesFile | null; dropped: number }
+
+export function parseCategoriesFileDetailed(text: string): ParsedCategoriesFile {
   let data: unknown
   try {
     data = JSON.parse(text)
   } catch {
-    return null
+    return { file: null, dropped: 0 }
   }
-  if (!data || typeof data !== 'object') return null
+  if (!data || typeof data !== 'object') return { file: null, dropped: 0 }
   const list = (data as { categories?: unknown }).categories
-  if (!Array.isArray(list)) return null
+  if (!Array.isArray(list)) return { file: null, dropped: 0 }
   const categories: BlogCategory[] = []
   const seenIds = new Set<string>()
   const seenSlugs = new Set<string>()
+  let dropped = 0
   for (const item of list) {
-    if (!isCategory(item)) continue
-    if (seenIds.has(item.id) || seenSlugs.has(item.slug)) continue
+    if (!isCategory(item) || seenIds.has(item.id) || seenSlugs.has(item.slug)) {
+      dropped += 1
+      continue
+    }
     seenIds.add(item.id)
     seenSlugs.add(item.slug)
     const out: BlogCategory = { id: item.id, name: item.name, slug: item.slug }
     if (item.description !== undefined) out.description = item.description
     categories.push(out)
   }
-  // A non-empty array with no survivors means a corrupt file, not an empty one.
-  if (list.length > 0 && categories.length === 0) return null
-  return { version: 1, categories }
+  return { file: { version: 1, categories }, dropped }
+}
+
+// Strict: null for anything but a fully valid file.
+export function parseCategoriesFile(text: string): CategoriesFile | null {
+  const { file, dropped } = parseCategoriesFileDetailed(text)
+  return dropped > 0 ? null : file
+}
+
+// Thrown when content/categories.json is corrupt (or, for routes that need an
+// existing file, missing). Routes map it to a 422.
+export class CategoriesFileError extends Error {
+  kind: 'corrupt' | 'missing'
+  constructor(kind: 'corrupt' | 'missing') {
+    super(kind === 'corrupt' ? 'content/categories.json is invalid' : 'content/categories.json does not exist')
+    this.name = 'CategoriesFileError'
+    this.kind = kind
+  }
 }
 
 export function serializeCategoriesFile(file: CategoriesFile): string {
@@ -79,31 +106,6 @@ export function seedCategoriesFromSchema(schema: SessionSchema): CategoriesFile 
     categories.push({ id, name, slug })
   }
   return { version: 1, categories }
-}
-
-export function readPostCategoryIds(postText: string): string[] {
-  const fm = splitFile(postText).frontmatter
-  if (!fm) return []
-  const arr = fm.arrayFields[KEY]
-  if (arr) return [...arr]
-  const scalar = fm.fields[KEY]
-  if (scalar && scalar.startsWith('[')) {
-    try {
-      const parsed: unknown = JSON.parse(scalar)
-      if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === 'string' && v.length > 0)
-    } catch {
-      // fall through to scalar handling
-    }
-  }
-  if (scalar) return [scalar]
-  // Block-style list: `categories:\n  - c-1\n  - c-2`
-  const lines = fm.blocks?.[KEY]?.lines ?? []
-  const ids: string[] = []
-  for (const line of lines) {
-    const m = /^\s*-\s+(.+?)\s*$/.exec(line)
-    if (m) ids.push(m[1].replace(/^["']|["']$/g, ''))
-  }
-  return ids
 }
 
 export function setPostCategoryIds(postText: string, ids: string[]): string {

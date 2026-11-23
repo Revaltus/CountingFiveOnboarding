@@ -21,12 +21,21 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('@/lib/github/repo-files', () => ({ StaleShaError: h.StaleShaError }))
-vi.mock('@/lib/content/blog-categories-repo', () => ({
-  ensureSeeded: h.ensureSeeded,
-  saveCategories: h.saveCategories,
-  listCategoryCounts: h.listCategoryCounts,
-  loadCategories: h.loadCategories,
-}))
+vi.mock('@/lib/content/blog-categories-repo', async () => {
+  const { CategoriesFileError } = await import('@/lib/content/blog-categories')
+  return {
+    ensureSeeded: h.ensureSeeded,
+    saveCategories: h.saveCategories,
+    listCategoryCounts: h.listCategoryCounts,
+    loadCategories: h.loadCategories,
+    requireCategories: async (repo: string) => {
+      const l = await h.loadCategories(repo)
+      if (l.corrupt) throw new CategoriesFileError('corrupt')
+      if (!l.file) throw new CategoriesFileError('missing')
+      return l
+    },
+  }
+})
 vi.mock('@/lib/design/capabilities-read', () => ({ readDraftTemplateVersion: vi.fn(async () => '2026.09.15') }))
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: () => ({
@@ -53,7 +62,7 @@ beforeEach(() => {
   h.dbError = false
   h.file = { version: 1, categories: [A, B] }
   h.sha = 'sha-1'
-  h.loadCategories.mockImplementation(async () => ({ file: h.file, sha: h.sha }))
+  h.loadCategories.mockImplementation(async () => ({ file: h.file, sha: h.sha, corrupt: false }))
   h.ensureSeeded.mockResolvedValue(h.file)
   h.listCategoryCounts.mockResolvedValue({ [A.id]: 2, [B.id]: 0 })
   h.saveCategories.mockResolvedValue(undefined)
@@ -82,8 +91,16 @@ describe('GET', () => {
     })
   })
 
-  it('422s when categories.json exists but is invalid', async () => {
-    h.loadCategories.mockResolvedValue({ file: null, sha: null })
+  it('422s (no seed) when categories.json is partially corrupt', async () => {
+    h.loadCategories.mockResolvedValue({ file: null, sha: null, corrupt: true })
+    const res = await GET(req('GET'), params)
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/content\/categories\.json is invalid/)
+    expect(h.ensureSeeded).not.toHaveBeenCalled()
+  })
+
+  it('422s when categories.json appears mid-seed and is invalid', async () => {
+    h.loadCategories.mockResolvedValue({ file: null, sha: null, corrupt: false })
     h.ensureSeeded.mockRejectedValue(new h.StaleShaError())
     const res = await GET(req('GET'), params)
     expect(res.status).toBe(422)
@@ -112,6 +129,14 @@ describe('GET', () => {
 })
 
 describe('POST', () => {
+  it('422 and no write when categories.json is corrupt', async () => {
+    h.loadCategories.mockResolvedValue({ file: null, sha: null, corrupt: true })
+    const res = await POST(req('POST', { name: 'Zed' }), params)
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/content\/categories\.json is invalid/)
+    expect(h.saveCategories).not.toHaveBeenCalled()
+    expect(h.ensureSeeded).not.toHaveBeenCalled()
+  })
   it('400 on empty name', async () => {
     expect((await POST(req('POST', { name: '  ' }), params)).status).toBe(400)
   })
@@ -142,6 +167,13 @@ describe('POST', () => {
 })
 
 describe('PATCH', () => {
+  it('422 and no write when categories.json is corrupt', async () => {
+    h.loadCategories.mockResolvedValue({ file: null, sha: null, corrupt: true })
+    const res = await PATCH(req('PATCH', { categories: [A, B], sha: 'sha-1' }), params)
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/content\/categories\.json is invalid/)
+    expect(h.saveCategories).not.toHaveBeenCalled()
+  })
   it('400 when an id is missing from the list', async () => {
     const res = await PATCH(req('PATCH', { categories: [A], sha: 'sha-1' }), params)
     expect(res.status).toBe(400)

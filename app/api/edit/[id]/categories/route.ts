@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { internalError } from '@/lib/api/errors'
 import { compareTemplateVersions } from '@/lib/content/block-catalog'
 import { newCategoryId, validateCategoryInput, CategoryValidationError, type BlogCategory } from '@/lib/content/blog-categories'
-import { listCategoryCounts, loadCategories, saveCategories } from '@/lib/content/blog-categories-repo'
+import { listCategoryCounts, loadCategories, requireCategories, saveCategories } from '@/lib/content/blog-categories-repo'
 import { readDraftTemplateVersion } from '@/lib/design/capabilities-read'
 import type {
   CategoriesGetResponse,
@@ -12,7 +12,7 @@ import type {
   CategoryCreateResponse,
 } from '@/types/blog-categories'
 import { resolveEditContext } from '../_helpers'
-import { actorOf, domainError, seedOrCorrupt, STALE_MESSAGE } from './_shared'
+import { actorOf, CORRUPT_MESSAGE, domainError, seedOrCorrupt, STALE_MESSAGE } from './_shared'
 
 export const runtime = 'nodejs'
 
@@ -27,12 +27,12 @@ export async function GET(_req: Request, { params }: Params) {
     const seed = await seedOrCorrupt(ctx)
     if (seed instanceof NextResponse) return seed
     const [loaded, counts, version] = await Promise.all([
-      loadCategories(ctx.githubRepo),
+      requireCategories(ctx.githubRepo),
       listCategoryCounts(ctx.githubRepo),
       readDraftTemplateVersion(ctx.githubRepo),
     ])
     const body: CategoriesGetResponse = {
-      categories: loaded.file?.categories ?? [],
+      categories: loaded.file.categories,
       counts,
       sha: loaded.sha,
       seeded: seed.seeded,
@@ -58,8 +58,8 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const seed = await seedOrCorrupt(ctx)
     if (seed instanceof NextResponse) return seed
-    const { file, sha } = await loadCategories(ctx.githubRepo)
-    const existing = file?.categories ?? []
+    const { file, sha } = await requireCategories(ctx.githubRepo)
+    const existing = file.categories
     const fields = validateCategoryInput(
       {
         name: body.name,
@@ -98,7 +98,8 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'categories and sha required' }, { status: 400 })
   }
   try {
-    const { file, sha } = await loadCategories(ctx.githubRepo)
+    const { file, sha, corrupt } = await loadCategories(ctx.githubRepo)
+    if (corrupt) return NextResponse.json({ error: CORRUPT_MESSAGE }, { status: 422 })
     if (!file) return NextResponse.json({ error: 'No categories to update' }, { status: 400 })
     if (sha !== body.sha) return NextResponse.json({ error: STALE_MESSAGE }, { status: 409 })
 

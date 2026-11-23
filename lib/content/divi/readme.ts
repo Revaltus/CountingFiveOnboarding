@@ -114,7 +114,7 @@ Import steps (start from a FRESH copy of the c5d5 boilerplate):
      upload ${opts.filenameBase}.wxr. (Install the "WordPress Importer" plugin
      if prompted.) Pages import as DRAFTS so you can review before publishing.${
        opts.categoryCount
-         ? `\n     Blog categories are included (${opts.categoryCount}); posts arrive via the Revaltus Blog Sync plugin.`
+         ? `\n     Blog categories are included as last published (${opts.categoryCount}); posts arrive via the Revaltus Blog Sync plugin.`
          : ''
      }
 

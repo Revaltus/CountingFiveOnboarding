@@ -14,7 +14,7 @@ vi.mock('../../_helpers', () => ({
 }))
 
 import { DELETE } from './route'
-import { CategoryValidationError } from '@/lib/content/blog-categories'
+import { CategoriesFileError, CategoryValidationError } from '@/lib/content/blog-categories'
 
 const call = (qs = '') =>
   DELETE(new Request(`http://x/api${qs}`, { method: 'DELETE' }), {
@@ -42,6 +42,12 @@ describe('DELETE /categories/[categoryId]', () => {
   it('400 for unknown moveTo', async () => {
     h.deleteCategory.mockRejectedValue(new CategoryValidationError('Move-to category does not exist', 400))
     expect((await call('?moveTo=c-nope')).status).toBe(400)
+  })
+  it('422 with the corrupt message when categories.json is corrupt', async () => {
+    h.deleteCategory.mockRejectedValue(new CategoriesFileError('corrupt'))
+    const res = await call()
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/content\/categories\.json is invalid/)
   })
   it('409 on stale', async () => {
     h.deleteCategory.mockRejectedValue(new h.StaleShaError())

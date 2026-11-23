@@ -29,6 +29,7 @@ import ImageReplaceControl from './ImageReplaceControl'
 import HeaderImagePicker from './HeaderImagePicker'
 import PostImagesPanel from './PostImagesPanel'
 import PostCategoryPicker, { withPostCategories } from './PostCategoryPicker'
+import { readCategoryIdsFromFrontmatter } from '@/lib/content/post-categories'
 import IconPickerControl from './IconPickerControl'
 import StructuredContentEditor from './StructuredContentEditor'
 import RichBodyEditor from './RichBodyEditor'
@@ -259,7 +260,7 @@ export default function PageEditor({
           {isPost && (
             <PostCategoryPicker
               sessionId={sessionId}
-              assigned={parsed.frontmatter.arrayFields.categories ?? []}
+              assigned={readCategoryIdsFromFrontmatter(parsed.frontmatter)}
               onChange={(ids) => commit(withPostCategories(parsed.frontmatter!, ids), bodyContent)}
             />
           )}
