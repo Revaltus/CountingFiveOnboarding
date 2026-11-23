@@ -18,6 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RV_Blog_Sync {
 
+	const LOCK = 'rv_blog_sync_lock';
+
 	/**
 	 * Run one sync pass.
 	 *
@@ -36,6 +38,26 @@ class RV_Blog_Sync {
 			return new WP_Error( 'rv_config', __( 'Feed URL and secret are required.', 'revaltus-blog-sync' ) );
 		}
 
+		// One pass at a time: WP-cron and "Sync now" (or two cron hits) running
+		// together would race on creating terms and posts. The TTL outlives a
+		// pass (30s fetch + 40s budget) and frees the lock if PHP dies mid-run.
+		if ( get_transient( self::LOCK ) ) {
+			return new WP_Error( 'rv_busy', __( 'A sync is already running — no changes made. Try again in a minute or two.', 'revaltus-blog-sync' ) );
+		}
+		set_transient( self::LOCK, 1, 120 );
+		try {
+			return self::run_pass( $feed_url, $secret );
+		} finally {
+			delete_transient( self::LOCK );
+		}
+	}
+
+	/**
+	 * Fetch the feed and reconcile. Called by run() while it holds the lock.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function run_pass( $feed_url, $secret ) {
 		// Wall budget for the whole run (from before the feed fetch). Kept well
 		// under a typical 60s gateway timeout; filterable for stricter hosts.
 		$start  = microtime( true );

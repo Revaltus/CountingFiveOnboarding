@@ -53,6 +53,8 @@ function rvh_reset() {
 		'options'   => array(),
 		'next_id'   => 100,
 		'calls'     => array(), // every term-table call, in order
+		'transients' => array(),
+		'fetches'   => array(), // per wp_remote_get: was the lock held?
 	);
 	file_put_contents( $GLOBALS['rv_log_file'], '' );
 }
@@ -236,6 +238,34 @@ function update_post_meta( $post_id, $key, $value ) {
 function delete_post_meta( $post_id, $key ) {
 	unset( $GLOBALS['rvh']['post_meta'][ $post_id ][ $key ] );
 	return true;
+}
+
+function get_transient( $key ) {
+	return isset( $GLOBALS['rvh']['transients'][ $key ] ) ? $GLOBALS['rvh']['transients'][ $key ] : false;
+}
+
+function set_transient( $key, $value, $ttl = 0 ) {
+	$GLOBALS['rvh']['transients'][ $key ] = $value;
+	return true;
+}
+
+function delete_transient( $key ) {
+	unset( $GLOBALS['rvh']['transients'][ $key ] );
+	return true;
+}
+
+function __( $text, $domain = 'default' ) {
+	return $text;
+}
+
+function apply_filters( $hook, $value ) {
+	return $value;
+}
+
+/** The feed fetch: records whether the lock was held, then fails (no network). */
+function wp_remote_get( $url, $args = array() ) {
+	$GLOBALS['rvh']['fetches'][] = (bool) get_transient( 'rv_blog_sync_lock' );
+	return new WP_Error( 'http_request_failed', 'harness: no network' );
 }
 
 function get_post_field( $field, $post_id ) {
@@ -451,6 +481,39 @@ check(
 RV_Categories::reconcile( array( 'categories' => array() ) );
 check( 'safety: hand term survives the owned term being deleted', isset( $GLOBALS['rvh']['terms'][ $hand ] ) );
 
+// same-name hand term (other slug): created alongside, operator is told
+site();
+$hand = rvh_term( 'Construction', 'construction-old' );
+RV_Categories::reconcile( array( 'categories' => array( cat( 'c-1', 'Construction', 'construction' ) ) ) );
+check(
+	'safety: same-name hand term is not adopted by name; a merge note is logged',
+	'construction-old' === $GLOBALS['rvh']['terms'][ $hand ]['slug'] && array() === $GLOBALS['rvh']['term_meta'][ $hand ]
+		&& false !== strpos( log_text(), '[rv-blog-sync]' ) && false !== strpos( log_text(), 'construction-old' ),
+	log_text()
+);
+
+// slug reuse in one publish: delete c-1 "tax" + create c-9 "tax"
+site();
+$old = rvh_term( 'Tax', 'tax', array( '_rv_category_id' => 'c-1' ) );
+$map = RV_Categories::reconcile( array( 'categories' => array( cat( 'c-9', 'Tax', 'tax' ) ) ) );
+$slugs = rvh_terms_by_slug();
+check(
+	'slug reuse: deleted category\'s slug is reused by a new one in the same run',
+	! isset( $GLOBALS['rvh']['terms'][ $old ] ) && isset( $slugs['tax'], $map['c-9'] ) && $map['c-9'] === $slugs['tax']
+		&& 'c-9' === get_term_meta( $slugs['tax'], '_rv_category_id', true )
+);
+
+// slug reuse: rename c-2 into c-1's freed slug
+site();
+$c1  = rvh_term( 'Tax', 'tax', array( '_rv_category_id' => 'c-1' ) );
+$c2  = rvh_term( 'Taxes', 'taxes', array( '_rv_category_id' => 'c-2' ) );
+$map = RV_Categories::reconcile( array( 'categories' => array( cat( 'c-2', 'Tax', 'tax' ) ) ) );
+check(
+	'slug reuse: rename into a slug freed by a deletion converges in one run',
+	! isset( $GLOBALS['rvh']['terms'][ $c1 ] ) && 'tax' === $GLOBALS['rvh']['terms'][ $c2 ]['slug'] && 'Tax' === $GLOBALS['rvh']['terms'][ $c2 ]['name']
+		&& array( 'c-2' => $c2 ) === $map
+);
+
 // owned default category: never deleted, only unlinked
 site();
 $uncat = $GLOBALS['rvh']['options']['default_category'];
@@ -526,6 +589,42 @@ check( 'assign: no registry → post categories unchanged (v1.2 only)', same_set
 $GLOBALS['rvh']['post_cats'][7] = array( $uncat );
 apply_assignments( 7, false, array( 'c-1' ), null );
 check( 'assign: no registry → v1.2 still moves default → "Blog"', same_set( array( $blog ), wp_get_post_categories( 7 ) ) );
+
+// adopted term on a post, category removed from the feed → settings category
+list( $uncat2, $blog2 ) = site();
+$tax = rvh_term( 'Tax', 'tax' );
+$m   = RV_Categories::reconcile( array( 'categories' => array( cat( 'c-1', 'Tax', 'tax' ) ) ) );
+$GLOBALS['rvh']['post_cats'][20] = array( $blog2 );
+apply_assignments( 20, false, array( 'c-1' ), $m );
+$ok_adopted = array( 'c-1' => $tax ) === $m && same_set( array( $tax ), wp_get_post_categories( 20 ) );
+$m = RV_Categories::reconcile( array( 'categories' => array() ) );
+apply_assignments( 20, false, array(), $m );
+check(
+	'assign: adopted category removed from feed → post falls back to "Blog"; term kept',
+	$ok_adopted && same_set( array( $blog2 ), wp_get_post_categories( 20 ) ) && isset( $GLOBALS['rvh']['terms'][ $tax ] )
+);
+// ---------------------------------------------------------------------------
+// Run lock.
+// ---------------------------------------------------------------------------
+
+site();
+$GLOBALS['rvh']['options'][ RV_BLOG_SYNC_OPTION ] += array( 'enabled' => 1, 'feed_url' => 'https://example.test/feed', 'secret' => 's' );
+$own = rvh_term( 'Construction', 'construction', array( '_rv_category_id' => 'c-1' ) );
+set_transient( 'rv_blog_sync_lock', 1, 120 );
+$GLOBALS['rvh']['calls'] = array();
+$r = RV_Blog_Sync::run();
+check(
+	'lock: a run while another holds the lock fetches nothing, writes no terms, keeps the lock',
+	is_wp_error( $r ) && 'rv_busy' === $r->get_error_code() && array() === $GLOBALS['rvh']['fetches']
+		&& array() === $GLOBALS['rvh']['calls'] && false !== get_transient( 'rv_blog_sync_lock' )
+);
+delete_transient( 'rv_blog_sync_lock' );
+$r = RV_Blog_Sync::run();
+check(
+	'lock: an unlocked run holds the lock while fetching and releases it after',
+	is_wp_error( $r ) && 'http_request_failed' === $r->get_error_code() && array( true ) === $GLOBALS['rvh']['fetches']
+		&& false === get_transient( 'rv_blog_sync_lock' )
+);
 
 // ---------------------------------------------------------------------------
 // Content hash.

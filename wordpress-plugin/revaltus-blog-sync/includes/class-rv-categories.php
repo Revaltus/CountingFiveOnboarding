@@ -64,22 +64,10 @@ final class RV_Categories {
 			}
 		}
 
-		$map = array();
-		foreach ( $registry['categories'] as $rv_id => $cat ) {
-			if ( isset( $by_rv_id[ $rv_id ] ) ) {
-				$term_id = (int) $by_rv_id[ $rv_id ]->term_id;
-				self::update_term( $by_rv_id[ $rv_id ], $cat );
-			} else {
-				$term_id = self::create_or_adopt( $rv_id, $cat );
-				if ( ! $term_id ) {
-					continue;
-				}
-			}
-			$map[ $rv_id ] = $term_id;
-		}
-
-		// Linked terms whose category left Revaltus. Ids of entries that were
-		// present but malformed are kept, so a bad entry never deletes a term.
+		// Linked terms whose category left Revaltus go first, so a slug they
+		// free (delete "tax" + create "tax", or a rename into it) is reused in
+		// the same run. Ids of entries that were present but malformed are
+		// kept, so a bad entry never deletes a term.
 		$default = (int) get_option( 'default_category' );
 		foreach ( $linked as $term_id => $rv_id ) {
 			if ( isset( $registry['seen'][ $rv_id ] ) ) {
@@ -97,6 +85,20 @@ final class RV_Categories {
 			if ( ! $deleted || is_wp_error( $deleted ) ) {
 				self::log( sprintf( 'could not delete category term %d (%s)', $term_id, $rv_id ) );
 			}
+		}
+
+		$map = array();
+		foreach ( $registry['categories'] as $rv_id => $cat ) {
+			if ( isset( $by_rv_id[ $rv_id ] ) ) {
+				$term_id = (int) $by_rv_id[ $rv_id ]->term_id;
+				self::update_term( $by_rv_id[ $rv_id ], $cat );
+			} else {
+				$term_id = self::create_or_adopt( $rv_id, $cat );
+				if ( ! $term_id ) {
+					continue;
+				}
+			}
+			$map[ $rv_id ] = $term_id;
 		}
 
 		return $map;
@@ -155,8 +157,12 @@ final class RV_Categories {
 		}
 
 		// No Revaltus categories: drop the ones we assigned, then the caller's
-		// v1.2 fallback (settings category) applies.
-		$next = array_values( array_diff( $current, array_intersect( $prev, $owned ) ) );
+		// v1.2 fallback (settings category) applies. A stored list is exactly
+		// what we assigned, so all of it goes (including a term un-linked or
+		// left behind since). A migration-derived prev is the settings/default
+		// category, which the fallback wants kept: only owned terms go then.
+		$drop = is_array( $stored ) ? $prev : array_intersect( $prev, $owned );
+		$next = array_values( array_diff( $current, $drop ) );
 		if ( $next !== $current ) {
 			// An empty list puts the post in WordPress's default category.
 			wp_set_post_categories( $post_id, $next, false );
@@ -222,6 +228,12 @@ final class RV_Categories {
 			update_term_meta( $existing->term_id, self::TERM_META_ADOPTED, 1 );
 			self::update_term( $existing, $cat );
 			return (int) $existing->term_id;
+		}
+
+		$same_name = get_term_by( 'name', $cat['name'], 'category' );
+		if ( $same_name && ! is_wp_error( $same_name ) && '' === (string) get_term_meta( $same_name->term_id, self::TERM_META_ID, true ) ) {
+			// Not adopted by name: that would change the hand term's URL.
+			self::log( sprintf( 'category "%s" (%s): created with slug "%s" next to existing WordPress category %d with the same name (slug "%s"); merge them by hand if they are the same', $cat['name'], $rv_id, $cat['slug'], $same_name->term_id, $same_name->slug ) );
 		}
 
 		$result = wp_insert_term(

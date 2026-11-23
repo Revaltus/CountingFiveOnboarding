@@ -97,6 +97,8 @@ WordPress (Divi) site PULL those published posts in on a schedule.
   the default category) the plugin put them in; that setting is now the
   fallback for posts without Revaltus categories.
 * Categories imported with the Revaltus Divi export are recognised as synced.
+* Only one sync runs at a time: a "Sync now" (or cron run) that starts while
+  another is running stops without changes and says so.
 
 = 1.4.0 =
 * Tables in synced posts are styled: header row, row striping, borders, and
